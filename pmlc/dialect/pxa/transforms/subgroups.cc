@@ -1,5 +1,7 @@
 // Copyright 2020 Intel Corporation
 
+#include "llvm/Support/Process.h"
+
 #include "mlir/Dialect/Affine/IR/AffineOps.h"
 #include "mlir/Dialect/Affine/IR/AffineValueMap.h"
 #include "mlir/Dialect/StandardOps/IR/Ops.h"
@@ -57,6 +59,8 @@ struct SubgroupParams {
   double cacheWidth;
   double cacheLatency;
   double memoryLatency;
+  int64_t cacheSize;
+  double memoryBoundThreshold;
 };
 
 struct SubgroupCostModel {
@@ -80,7 +84,7 @@ struct SubgroupCostModel {
       return;
     }
     ranges = *maybeRanges;
-    IVLOG(3, "Ranges = " << *maybeRanges);
+    IVLOG(1, "Ranges = " << *maybeRanges);
     // Preflight all loads/stores + cache
     bool safe = true;
     op.walk([&](PxaReduceOp red) {
@@ -115,7 +119,7 @@ struct SubgroupCostModel {
 
   template <typename OpType>
   bool preflightIO(OpType ioOp) {
-    IVLOG(3, "Preflight: " << debugString(*ioOp.getOperation()));
+    IVLOG(1, "Preflight: " << debugString(*ioOp.getOperation()));
     if (ioOp.getOperation()->getBlock() != op.getBody()) {
       IVLOG(3, "Not part of block");
       return false;
@@ -128,32 +132,56 @@ struct SubgroupCostModel {
       return false;
     }
     ioDimStrides.push_back(*maybeDimStrides);
-    IVLOG(3, "  dimensional strides = " << *maybeDimStrides)
+    IVLOG(1, "  dimensional strides = " << *maybeDimStrides)
 
-    auto memreftype = ioOp.getMemRefType();
+    auto memRefType = ioOp.getMemRefType();
 
     int64_t offset;
     SmallVector<int64_t, 4> tensorStrides;
-    if (failed(getStridesAndOffset(memreftype, tensorStrides, offset))) {
+    if (failed(getStridesAndOffset(memRefType, tensorStrides, offset))) {
       IVLOG(3, "Cannot compute tensor strides");
       return false;
     }
     ioTensorStrides.push_back(tensorStrides);
-    IVLOG(3, "  dimensional strides = " << tensorStrides);
+    IVLOG(1, "  tensor strides = " << tensorStrides);
 
-    auto elementtype = memreftype.getElementType();
-    assert(elementtype.isIntOrFloat());
-    ioElementSizesInBytes.push_back(elementtype.getIntOrFloatBitWidth() / 8);
+    auto elementType = memRefType.getElementType();
+    assert(elementType.isIntOrFloat());
+    ioElementSizesInBytes.push_back(elementType.getIntOrFloatBitWidth() / 8);
     return true;
   }
 
   void computeCostRecursive(unsigned idx) {
-    if (idx == ranges.size()) {
-      auto cost = computeCost();
-      if (cost < bestCost) {
-        bestCost = cost;
-        bestPlan = plan;
+    auto subgroupPlanEnv = llvm::sys::Process::GetEnv("SUBGROUP_PLAN");
+    if (subgroupPlanEnv) {
+      std::stringstream forcePlan(subgroupPlanEnv->c_str());
+      std::vector<std::string> substrs;
+      while (forcePlan.good()) {
+        std::string substr;
+        getline(forcePlan, substr, ',');
+        substrs.push_back(substr);
       }
+
+      assert(substrs.size() == ranges.size() * 2 + 1);
+      plan.subgroupSize = std::atoi(substrs[0].c_str());
+      size_t i = 1;
+      for (auto &it : plan.innerTile) {
+        it = std::atoi(substrs[i++].c_str());
+      }
+      for (auto &st : plan.subgroupTile) {
+        st = std::atoi(substrs[i++].c_str());
+      }
+
+      IVLOG(1, "FORCING SUBGROUP PLAN");
+      IVLOG(1, "Subgroup Size = " << plan.subgroupSize);
+      IVLOG(1, "Inner Tile    = " << plan.innerTile);
+      IVLOG(1, "Subgroup Tile = " << plan.subgroupTile);
+
+      idx = ranges.size();
+    }
+
+    if (idx == ranges.size()) {
+      computeCost();
       return;
     }
     // Try using a subgroup or not for each index
@@ -228,19 +256,40 @@ struct SubgroupCostModel {
     return out;
   }
 
-  double computeCost() {
+  int64_t num_groups(SmallVector<StrideInfo, 4> outputDimStrides) {
+    int64_t groups = 1;
+    for (size_t rangeIndex = 0; rangeIndex < ranges.size(); ++rangeIndex) {
+      for (size_t i = 0; i < outputDimStrides.size(); ++i) {
+        for (auto kvp : outputDimStrides[i].strides) {
+          auto strideIndex = kvp.first.getArgNumber();
+          if (rangeIndex == strideIndex && kvp.second) {
+            groups *= (ranges[rangeIndex] / plan.innerTile[rangeIndex]);
+          }
+        }
+      }
+    }
+    return groups;
+  }
+
+  void computeCost() {
+    if (DONE) {
+      return;
+    }
+
+    totalPlans++;
     int64_t totRegisters = 0;
     int64_t totAccesses = 0;
     double totCacheMiss = 0.0;
+    int64_t totMemory = 0;
 
     for (size_t i = 0; i < ioDimStrides.size(); i++) {
       auto mi = computeMemoryInfo(ioDimStrides[i], ioTensorStrides[i],
                                   ioElementSizesInBytes[i]);
       if (mi.subgroupCount > 1) {
-        return std::numeric_limits<double>::infinity();
+        return;
       }
       if (i == 0 && mi.subgroupCount == 0) {
-        return std::numeric_limits<double>::infinity();
+        return;
       }
 
       if (mi.subgroupCount) {
@@ -252,15 +301,18 @@ struct SubgroupCostModel {
       totRegisters += mi.registers;
       totAccesses += mi.accesses;
       totCacheMiss += mi.cacheMiss;
+      totMemory += totRegisters * ioElementSizesInBytes[i];
     }
 
     if (totRegisters > params.maxRegsPerThread) {
       IVLOG(3, "Invalid subgroup plan: " << plan << ", totRegisters = "
                                          << totRegisters);
-      return std::numeric_limits<double>::infinity();
+      return;
     }
     IVLOG(3, "Valid subgroup plan: " << plan
                                      << ", totRegisters = " << totRegisters);
+
+    validPlans++;
 
     int64_t totOps = 1;
     for (auto it : plan.innerTile) {
@@ -270,7 +322,39 @@ struct SubgroupCostModel {
     double totMemIO = (totAccesses - totCacheMiss) * params.cacheLatency +
                       totCacheMiss * params.memoryLatency;
 
-    return totMemIO / totOps;
+    double cost = totMemIO / totOps;
+
+    int64_t groups = num_groups(ioDimStrides[0]);
+    bool isMemBounded =
+        (totMemory * groups) > params.cacheSize ||
+        (static_cast<double>(totOps) / static_cast<double>(totMemory)) <=
+            params.memoryBoundThreshold;
+
+    bool replace = !isMemBounded && bestIsMemBounded;
+    if (isMemBounded == bestIsMemBounded) {
+      replace = isMemBounded ? cost < bestCost
+                             : groups / totMemIO > bestGroups / bestTotMemIO;
+    }
+
+    auto bp = diag.next();
+    if (bp == util::DiagnosticCounter::Result::Match) {
+      replace = true;
+      DONE = true;
+    }
+
+    if (replace) {
+      bestPlan = plan;
+      bestCost = cost;
+      bestGroups = groups;
+      bestTotMemIO = totMemIO;
+      bestIsMemBounded = isMemBounded;
+
+      // for logging purposes only
+      bestRegs = totRegisters;
+      bestTotOps = totOps;
+      bestAccesses = totAccesses;
+      bestCacheMiss = totCacheMiss;
+    }
   }
 
   // The parameters to the cost model
@@ -289,6 +373,23 @@ struct SubgroupCostModel {
   SmallVector<SmallVector<StrideInfo, 4>, 4> ioDimStrides;
   SmallVector<SmallVector<int64_t, 4>, 4> ioTensorStrides;
   SmallVector<unsigned, 4> ioElementSizesInBytes;
+
+  // compute bound cost model
+  int64_t bestGroups{0};
+  double bestTotMemIO{1.0};
+  bool bestIsMemBounded{true};
+
+  // breakpoint
+  bool DONE{false};
+  util::DiagnosticCounter diag;
+
+  // for logging purposes only
+  int64_t totalPlans{0};
+  int64_t validPlans{0};
+  int64_t bestRegs{0};
+  int64_t bestTotOps{0};
+  int64_t bestAccesses{0};
+  double bestCacheMiss{0.0};
 };
 
 void SubgroupApply(AffineParallelOp op, SubgroupPlan plan) {
@@ -323,12 +424,20 @@ struct SubgroupsPass : public SubgroupsBase<SubgroupsPass> {
   }
 
   void doSubgroups(AffineParallelOp op) {
+    unsigned mrpt = 40;
+    auto mrptEnv = llvm::sys::Process::GetEnv("MAX_REGS_PER_THREAD");
+    if (mrptEnv) {
+      mrpt = std::atoi(mrptEnv->c_str());
+    }
+
     SubgroupParams params = {
         {8, 16}, // Subgroup sizes to consider
-        40,      // Maximum register per thread
+        mrpt,    // Maximum register per thread
         64.0,    // Cache width
         125.0,   // Cache latency
         420.0,   // Memory latency
+        2359296, // Cache size
+        14.0     // Memory bound threshold
     };
     SubgroupCostModel cm(params, op);
     if (cm.bestCost == std::numeric_limits<double>::infinity()) {
@@ -338,7 +447,30 @@ struct SubgroupsPass : public SubgroupsBase<SubgroupsPass> {
       setIntegerTag(op, subgroupSizeTag(), 1);
       return;
     }
-    IVLOG(3, "best plan = " << cm.bestPlan);
+
+    std::ofstream csv;
+    csv.open("/home/adstraw/work/mrpt/mrpt.csv", std::ios_base::app);
+    csv << params.maxRegsPerThread << ", ";
+    csv << cm.bestRegs << ", ";
+    csv << cm.bestAccesses << ", ";
+    csv << cm.bestCacheMiss << ", ";
+    csv << cm.bestPlan << ", ";
+    if (cm.bestIsMemBounded) {
+      csv << "yes, ";
+    } else {
+      csv << "no, ";
+    }
+    csv << cm.bestGroups << ", ";
+    csv << cm.bestTotMemIO << ", ";
+    csv << cm.bestTotOps << ", ";
+    csv << cm.bestGroups / cm.bestTotMemIO << ", ";
+    csv << cm.bestCost << ", ";
+
+    csv.close();
+
+    IVLOG(1, "total plans = " << cm.totalPlans);
+    IVLOG(1, "valid plans = " << cm.validPlans);
+    IVLOG(1, "best plan = " << cm.bestPlan);
     SubgroupApply(op, cm.bestPlan);
   }
 };

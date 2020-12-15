@@ -935,6 +935,28 @@ TEST_F(CppEdsl, ComplexConv2d) {
   runProgram(program);
 }
 
+TEST_F(CppEdsl, Res2a2a) {
+  auto I = Placeholder(DType::FLOAT32, {1, 56, 56, 64});
+  auto K = Placeholder(DType::FLOAT32, {1, 1, 64, 64});
+  auto O = Convolution2(I, K);
+  auto program = makeProgram("convolution", {I, K}, {O});
+  // clang-format off
+  // CHECK-LABEL: convolution
+  // clang-format on
+  runProgram(program);
+}
+
+TEST_F(CppEdsl, simple) {
+  auto I = Placeholder(DType::FLOAT32, {1, 16, 16, 64});
+  auto K = Placeholder(DType::FLOAT32, {1, 1, 64, 64});
+  auto O = Convolution2(I, K);
+  auto program = makeProgram("convolution", {I, K}, {O});
+  // clang-format off
+  // CHECK-LABEL: convolution
+  // clang-format on
+  runProgram(program);
+}
+
 TEST_F(CppEdsl, Reciprocal) {
   auto A = Placeholder(DType::FLOAT32, {6}, "A");
   auto R = 1.0 / A;

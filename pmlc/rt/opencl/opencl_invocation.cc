@@ -177,6 +177,12 @@ void OpenCLInvocation::finish() {
   IVLOG(1, "Total OpenCL kernels: " << kernelsCnt);
   IVLOG(1, "Total OpenCL kernel execute time: "
                << fp_milliseconds(kernelExecuteTime).count() << "ms");
+
+  std::ofstream csv;
+  csv.open("/home/adstraw/work/mrpt/mrpt.csv", std::ios_base::app);
+  csv << fp_milliseconds(kernelExecuteTime).count() << ", ";
+  csv.close();
+
   IVLOG(1, "Total OpenCL memory transfers: " << memoryCnt);
   IVLOG(1, "Total OpenCL memory transfer time: "
                << fp_milliseconds(memoryExecuteTime).count() << "ms");
