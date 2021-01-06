@@ -1695,5 +1695,29 @@ inline Tensor layer(const std::string& op, const TensorVec& operands, const Laye
   return layer(op, operands, {}, fn, loc);
 }
 
+///
+/// Returns a tensor populated with the index value of the shape and axis specified.
+/// \param dims std::vector<TensorDim>
+/// \param axis size_t
+/// \return Tensor
+///
+
+using loopSingefunc = std::function<Tensor()>;
+using loopMultifunc = std::function<TensorVec()>;
+
+inline Tensor loop(int64_t loopCycle, const TensorVec& operands) {
+  TensorVec args = {Tensor{static_cast<int64_t>(loopCycle)}};
+  args.insert(args.end(), operands.begin(), operands.end());
+  return intrinsicCall("loop", args);
+}
+
+inline Tensor loop(int64_t loopCycle, const loopMultifunc& fn){
+  return loop(loopCycle, fn());
+}
+
+inline Tensor loop(int64_t loopCycle, const loopSingefunc& fn){
+  return loop(loopCycle, {fn()});
+}
+
 }  // namespace edsl
 }  // namespace plaidml

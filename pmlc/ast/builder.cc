@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "mlir/Dialect/StandardOps/IR/Ops.h"
+#include "mlir/Dialect/SCF/SCF.h"
 #include "mlir/IR/BlockAndValueMapping.h"
 #include "mlir/IR/Matchers.h"
 #include "mlir/Pass/PassManager.h"
@@ -477,6 +478,7 @@ struct ProgramBuilder {
     context->getOrLoadDialect<dialect::tile::TileDialect>();
     context->getOrLoadDialect<dialect::layer::LayerDialect>();
     context->getOrLoadDialect<StandardOpsDialect>();
+    context->getOrLoadDialect<mlir::scf::SCFDialect>();
   }
 
   std::shared_ptr<Program> build(const ProgramArguments &args) {
@@ -670,6 +672,7 @@ struct ProgramBuilder {
             .Case("reshape", [&]() { return makeReshapeOp(node, operands); })
             .Case("scatter", [&]() { return makeScatterOp(node, operands); })
             .Case("gather", [&]() { return makeGatherOp(node, operands); })
+            .Case("loop",[&]() { return makeLoopOp(node, operands); })
             .Default([&]() {
               const AbstractOperation *abstractOp = lookupOperation(node->op);
               OperationState state(loc, abstractOp->name);
@@ -750,6 +753,44 @@ struct ProgramBuilder {
         .create<tile::PragmaOp>(loc, tensor, node->op,
                                 builder.getDictionaryAttr(attrs))
         .result();
+  }
+
+  Value makeLoopOp(ExprNodeIntrinsic *node, ArrayRef<Value> operands) {
+    if (operands.size() < 1) {
+      throw std::runtime_error(
+          "'index' primitive expects at least one operand");
+    }
+    Value loopCycle = operands.front();
+    std::vector<ExprNodePtr> loopOperation(node->operands.begin()+1, node->operands.end());
+    AstTraversal traversal(loopOperation);
+
+    // replace layer op to loop op.
+    auto layerOp = builder.create<layer::BoxOp>(
+        loc, node->op, operands, results.getArrayRef(),
+        builder.getDictionaryAttr(attrs));
+
+    OpBuilder bodyBuilder(layerOp.body());
+    llvm::SetVector<Operation *> toRemove;
+    for (const ExprNodePtr &node : traversal.getFlat()) {
+      Value value = builder.lookupNode(node);
+      Operation *op = value.getDefiningOp();
+      if (toRemove.contains(op)) {
+        // this has already been visited
+        continue;
+      }
+      assert(op && "Unexpected block argument");
+      Operation *clonedOp = bodyBuilder.clone(*op);
+      toRemove.insert(op);
+    }
+    for (Operation *op : toRemove) {
+      op->erase();
+    }
+
+    // use tensorshape we can build tensor type as result tensor type.
+    TensorShape shape = evaluator.getShape(node);
+    RankedTensorType resultType = builder.getRankedTensorType(shape);
+    auto op = builder.create<tile::ReshapeOp>(loc, resultType, operands[0]);
+    return op.result();
   }
 
   Value makeGatherOp(ExprNodeIntrinsic *node, ArrayRef<Value> operands) {
