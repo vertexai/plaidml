@@ -1687,7 +1687,8 @@ inline TensorVec layer(const std::string& op, const TensorVec& operands, const D
 
 inline Tensor layer(const std::string& op, const TensorVec& operands, const Dictionary& attrs,
                     const LayerBodySingleFn& fn, edsl_source_location loc = edsl_source_location::current()) {
-  return layer(op, operands, attrs, [&]() { return TensorVec{fn()}; }, loc)[0];
+  return layer(
+      op, operands, attrs, [&]() { return TensorVec{fn()}; }, loc)[0];
 }
 
 inline Tensor layer(const std::string& op, const TensorVec& operands, const LayerBodySingleFn& fn,
@@ -1696,27 +1697,31 @@ inline Tensor layer(const std::string& op, const TensorVec& operands, const Laye
 }
 
 ///
-/// Returns a tensor populated with the index value of the shape and axis specified.
-/// \param dims std::vector<TensorDim>
-/// \param axis size_t
+/// wrapper edsl graph into SCF loop.
+/// \param TensorVec
+/// \param loopCycle int64_t
 /// \return Tensor
 ///
 
 using loopSingefunc = std::function<Tensor()>;
 using loopMultifunc = std::function<TensorVec()>;
 
-inline Tensor loop(int64_t loopCycle, const TensorVec& operands) {
-  TensorVec args = {Tensor{static_cast<int64_t>(loopCycle)}};
+inline Tensor loop(size_t lb, size_t hb, size_t step, const TensorVec& operands, const TensorVec& results) {
+  if (operands.size() != results.size()) {
+    throw ffi_exception("iter args don't equal to init args of scf", edsl_source_location::current());
+  }
+  TensorVec args = {Tensor{lb}, Tensor{static_cast<int64_t>(hb)}, Tensor{step}};
   args.insert(args.end(), operands.begin(), operands.end());
+  args.insert(args.end(), results.begin(), results.end());
   return intrinsicCall("loop", args);
 }
 
-inline Tensor loop(int64_t loopCycle, const loopMultifunc& fn){
-  return loop(loopCycle, fn());
-}
+// inline Tensor loop(int64_t loopCycle, const TensorVec& operands, const loopMultifunc& fn){
+//  return loop(loopCycle, fn());
+//}
 
-inline Tensor loop(int64_t loopCycle, const loopSingefunc& fn){
-  return loop(loopCycle, {fn()});
+inline Tensor loop(size_t lb, size_t hb, size_t step, const TensorVec& operands, const loopSingefunc& fn) {
+  return loop(lb, hb, step, operands, {fn()});
 }
 
 }  // namespace edsl

@@ -1957,6 +1957,24 @@ TEST_F(CppEdsl, Lens) {
   checkExact(program, {input}, {expected});
 }
 
+TEST_F(CppEdsl, Loop) {
+  auto A = Placeholder(DType::FLOAT32, {4});
+  size_t lb = 0;
+  size_t hb = 5;
+  size_t step = 1;
+  Tensor O = loop(/*lowerBound*/ lb, /*upperBound*/ hb, /*step*/ step,  //
+                  /*input parameter*/ {A},                              //
+                  [&]() { return A + 1; });
+  auto program = makeProgram("loop", {A}, {O});
+  std::vector<float> input = {
+      1, 1, 1, 1  //
+  };
+  std::vector<float> expected = {
+      6, 6, 6, 6  //
+  };
+  checkExact(program, {input}, {expected});
+}
+
 TEST_F(CppEdsl, Layer) {
   auto A = Placeholder(DType::FLOAT32, {10, 20});
   Tensor O = layer("relu", {A}, [&]() { return Relu(A); });

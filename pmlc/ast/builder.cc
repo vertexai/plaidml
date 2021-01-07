@@ -9,8 +9,8 @@
 #include <unordered_set>
 #include <vector>
 
-#include "mlir/Dialect/StandardOps/IR/Ops.h"
 #include "mlir/Dialect/SCF/SCF.h"
+#include "mlir/Dialect/StandardOps/IR/Ops.h"
 #include "mlir/IR/BlockAndValueMapping.h"
 #include "mlir/IR/Matchers.h"
 #include "mlir/Pass/PassManager.h"
@@ -672,7 +672,7 @@ struct ProgramBuilder {
             .Case("reshape", [&]() { return makeReshapeOp(node, operands); })
             .Case("scatter", [&]() { return makeScatterOp(node, operands); })
             .Case("gather", [&]() { return makeGatherOp(node, operands); })
-            .Case("loop",[&]() { return makeLoopOp(node, operands); })
+            .Case("loop", [&]() { return makeLoopOp(node, operands); })
             .Default([&]() {
               const AbstractOperation *abstractOp = lookupOperation(node->op);
               OperationState state(loc, abstractOp->name);
@@ -756,41 +756,68 @@ struct ProgramBuilder {
   }
 
   Value makeLoopOp(ExprNodeIntrinsic *node, ArrayRef<Value> operands) {
-    if (operands.size() < 1) {
+    /// the operands contain lowBound, upperBound, step, and loop-carried
+    /// variables, and it's init Value
+    if (operands.size() < 3) {
       throw std::runtime_error(
           "'index' primitive expects at least one operand");
     }
-    Value loopCycle = operands.front();
-    std::vector<ExprNodePtr> loopOperation(node->operands.begin()+1, node->operands.end());
-    AstTraversal traversal(loopOperation);
+    // take lowBound, upperBound, step from operands.
+    auto indices = operands.take_front(3);
+    SmallVector<Value, 4> indexTypeIndices;
+    auto indexType = builder.getIndexType();
+    for (auto bounder : indices) {
+      indexTypeIndices.push_back(
+          builder.create<mlir::IndexCastOp>(loc, bounder, indexType));
+    }
 
-    // replace layer op to loop op.
-    auto layerOp = builder.create<layer::BoxOp>(
-        loc, node->op, operands, results.getArrayRef(),
-        builder.getDictionaryAttr(attrs));
+    auto loopCarriedVar = operands.drop_front(3);
+    if (loopCarriedVar.size() % 2) {
+      throw std::runtime_error(
+          "In scfFor op, init Iter number have to equal Iter args");
+    }
+    // take loop-carried variables, and it's init Value
+    auto IterNum = loopCarriedVar.size() / 2;
+    auto InitArgs = loopCarriedVar.take_front(IterNum);
+    auto IterArgs = loopCarriedVar.drop_front(IterNum);
+    std::vector<ExprNodePtr> loopContext(node->operands.begin() + IterNum + 3,
+                                         node->operands.end());
 
-    OpBuilder bodyBuilder(layerOp.body());
+    AstTraversal traversal(loopContext);
+    auto scfForOp = builder.create<mlir::scf::ForOp>(
+        loc, indexTypeIndices[0], indexTypeIndices[1], indexTypeIndices[2],
+        InitArgs);
+
+    OpBuilder bodyBuilder(scfForOp.getLoopBody());
     llvm::SetVector<Operation *> toRemove;
+    BlockAndValueMapping mapper;
+    auto IterVaules = scfForOp.getRegionIterArgs();
+    for (auto tuple : llvm::zip(InitArgs, IterVaules)) {
+      Value outer, inner;
+      std::tie(outer, inner) = tuple;
+      mapper.map(outer, inner);
+    }
     for (const ExprNodePtr &node : traversal.getFlat()) {
       Value value = builder.lookupNode(node);
+      if (InitArgs.equals(value)) {
+        continue;
+      }
       Operation *op = value.getDefiningOp();
-      if (toRemove.contains(op)) {
-        // this has already been visited
+      op->dump();
+      if (isa<tile::ConstantOp>(op) || toRemove.contains(op)) {
         continue;
       }
       assert(op && "Unexpected block argument");
-      Operation *clonedOp = bodyBuilder.clone(*op);
+      Operation *clonedOp = bodyBuilder.clone(*op, mapper);
       toRemove.insert(op);
     }
+    scfForOp.dump();
+    bodyBuilder.create<scf::YieldOp>(
+        loc, scfForOp.getLoopBody().back().back().getResult(0));
     for (Operation *op : toRemove) {
       op->erase();
     }
-
-    // use tensorshape we can build tensor type as result tensor type.
-    TensorShape shape = evaluator.getShape(node);
-    RankedTensorType resultType = builder.getRankedTensorType(shape);
-    auto op = builder.create<tile::ReshapeOp>(loc, resultType, operands[0]);
-    return op.result();
+    return scfForOp.results()[0];
   }
 
   Value makeGatherOp(ExprNodeIntrinsic *node, ArrayRef<Value> operands) {
