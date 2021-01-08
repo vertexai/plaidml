@@ -797,23 +797,50 @@ struct ProgramBuilder {
       std::tie(outer, inner) = tuple;
       mapper.map(outer, inner);
     }
+    // choice the ops which should put to loop region.
+    std::vector<Value> affectValue(InitArgs);
+    std::set<Operation *> innerLoopValue;
+    int length = affectValue.size();
+    int start = 0;
+    while (start != length) {
+      for (auto i = start; i < length; i++) {
+        for (auto &v : affectValue[i].getUses()) {
+          auto op = v.getOwner();
+          if (innerLoopValue.count(op) || op == scfForOp.getOperation()) {
+            continue;
+          }
+          for (auto i = 0; i < op->getNumResults(); i++) {
+            affectValue.push_back(op->getResult(i));
+          }
+          innerLoopValue.insert(op);
+        }
+      }
+      start = length;
+      length = affectValue.size();
+    }
+
+    SmallVector<Value, 4> yieldValue;
     for (const ExprNodePtr &node : traversal.getFlat()) {
       Value value = builder.lookupNode(node);
-      if (InitArgs.equals(value)) {
+      // skip init value.
+      if (InitArgs.equals(value)){
         continue;
       }
+      value.dump();
       Operation *op = value.getDefiningOp();
-      op->dump();
-      if (isa<tile::ConstantOp>(op) || toRemove.contains(op)) {
+      assert(op && "Unexpected block argument");
+      // skip duplicate op, and not inside loop op.
+      if (toRemove.contains(op) || !innerLoopValue.count(op)) {
         continue;
       }
-      assert(op && "Unexpected block argument");
       Operation *clonedOp = bodyBuilder.clone(*op, mapper);
+      if (IterArgs.equals(value)) {
+        yieldValue.push_back(clonedOp->getResult(0));
+      }
       toRemove.insert(op);
     }
-    scfForOp.dump();
-    bodyBuilder.create<scf::YieldOp>(
-        loc, scfForOp.getLoopBody().back().back().getResult(0));
+
+    bodyBuilder.create<scf::YieldOp>(loc, yieldValue);
     for (Operation *op : toRemove) {
       op->erase();
     }
