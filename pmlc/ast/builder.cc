@@ -809,7 +809,7 @@ struct ProgramBuilder {
           if (innerLoopValue.count(op) || op == scfForOp.getOperation()) {
             continue;
           }
-          for (auto i = 0; i < op->getNumResults(); i++) {
+          for (unsigned i = 0; i < op->getNumResults(); i++) {
             affectValue.push_back(op->getResult(i));
           }
           innerLoopValue.insert(op);
@@ -826,7 +826,6 @@ struct ProgramBuilder {
       if (InitArgs.equals(value)){
         continue;
       }
-      value.dump();
       Operation *op = value.getDefiningOp();
       // skip duplicate op, and not inside loop op.
       if (!op || toRemove.contains(op) || !innerLoopValue.count(op)) {
