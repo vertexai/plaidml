@@ -828,9 +828,8 @@ struct ProgramBuilder {
       }
       value.dump();
       Operation *op = value.getDefiningOp();
-      assert(op && "Unexpected block argument");
       // skip duplicate op, and not inside loop op.
-      if (toRemove.contains(op) || !innerLoopValue.count(op)) {
+      if (!op || toRemove.contains(op) || !innerLoopValue.count(op)) {
         continue;
       }
       Operation *clonedOp = bodyBuilder.clone(*op, mapper);
