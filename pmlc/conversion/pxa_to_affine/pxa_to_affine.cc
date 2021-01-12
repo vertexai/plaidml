@@ -1,6 +1,7 @@
 // Copyright 2020 Intel Corporation
 
 #include "mlir/Dialect/StandardOps/IR/Ops.h"
+#include "mlir/Dialect/SCF/SCF.h"
 #include "mlir/IR/IntegerSet.h"
 #include "mlir/Pass/Pass.h"
 #include "mlir/Pass/PassManager.h"
@@ -311,6 +312,7 @@ PXAToAffineConversionTarget::PXAToAffineConversionTarget(MLIRContext &ctx)
     : ConversionTarget(ctx) {
   addLegalDialect<AffineDialect>();
   addLegalDialect<StandardOpsDialect>();
+  addLegalDialect<mlir::scf::SCFDialect>();
   addIllegalDialect<pxa::PXADialect>();
   addDynamicallyLegalOp<AffineParallelOp>([](AffineParallelOp op) {
     return op.getNumResults() == 0 && hasTags(op);

@@ -3,6 +3,7 @@
 #include "pmlc/dialect/pxa/analysis/uses.h"
 
 #include "mlir/Dialect/StandardOps/IR/Ops.h"
+#include "mlir/Dialect/SCF/SCF.h"
 #include "llvm/ADT/TypeSwitch.h"
 
 #include "pmlc/dialect/layer/ir/ops.h"
@@ -22,6 +23,13 @@ Value getPrevIndirectDef(OpResult def) {
       .Case<AffineIfOp>([&](auto op) {
         auto yield = cast<AffineYieldOp>(op.getThenBlock()->getTerminator());
         return yield.getOperand(def.getResultNumber());
+      })
+      .Case<scf::ForOp>([&](auto op) {
+        std::vector<AffineParallelOp> contain;
+        op.walk([&](AffineParallelOp op){
+          contain.push_back(op);
+        });
+        return contain[0].getResult(0);
       })
       .Case<layer::BoxOp>([&](auto op) {
         return op.getOperand(def.getResultNumber()); //

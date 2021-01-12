@@ -1970,7 +1970,7 @@ TEST_F(CppEdsl, Loop) {
       1, 1, 1, 1  //
   };
   std::vector<float> expected = {
-      0, 0, 0, 0  //
+      6, 6, 6, 6  //
   };
   checkExact(program, {input}, {expected});
 }
@@ -1992,7 +1992,7 @@ TEST_F(CppEdsl, LoopConstantBuffer) {
       1, 1, 1, 1  //
   };
   std::vector<float> expected = {
-      0, 0, 0, 0  //
+      6, 6, 6, 6  //
   };
   checkExact(program, {input}, {expected});
 }
