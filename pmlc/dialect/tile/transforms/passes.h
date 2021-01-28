@@ -22,6 +22,8 @@ std::unique_ptr<mlir::Pass> createPadConstraintsPass();
 
 std::unique_ptr<mlir::Pass> createSplitMainPass();
 
+std::unique_ptr<mlir::Pass> createScfForReplacePass();
+
 /// Generate the code for registering passes.
 #define GEN_PASS_REGISTRATION
 #include "pmlc/dialect/tile/transforms/passes.h.inc"

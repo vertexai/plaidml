@@ -12,6 +12,7 @@ pml_cc_library(
     pad_ranges.cc
     padding.cc
     split_main.cc
+    replace_scfFor_alloc.cc
   DEPS
     LLVMSupport
     MLIRIR

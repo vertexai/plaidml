@@ -25,11 +25,8 @@ Value getPrevIndirectDef(OpResult def) {
         return yield.getOperand(def.getResultNumber());
       })
       .Case<scf::ForOp>([&](auto op) {
-        std::vector<AffineParallelOp> contain;
-        op.walk([&](AffineParallelOp op){
-          contain.push_back(op);
-        });
-        return contain[0].getResult(0);
+        auto yield = cast<scf::YieldOp>(op.getBody()->getTerminator());
+        return yield.getOperand(def.getResultNumber());
       })
       .Case<layer::BoxOp>([&](auto op) {
         return op.getOperand(def.getResultNumber()); //

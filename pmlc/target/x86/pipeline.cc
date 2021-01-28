@@ -244,6 +244,7 @@ void pipelineBuilder(OpPassManager &pm) {
   pm.addPass(createCSEPass());
 
   pm.addPass(pmlc::conversion::tile_to_pxa::createLowerTileToPXAPass());
+  pm.addNestedPass<FuncOp>(tile::createScfForReplacePass());
   pm.addPass(createCanonicalizerPass());
   pm.addPass(createCSEPass());
   pm.addNestedPass<FuncOp>(layer::createInlineLayersPass());
