@@ -1706,22 +1706,53 @@ inline Tensor layer(const std::string& op, const TensorVec& operands, const Laye
 using loopSingefunc = std::function<Tensor()>;
 using loopMultifunc = std::function<TensorVec()>;
 
-inline Tensor loop(size_t lb, size_t hb, size_t step, const TensorVec& operands, const TensorVec& results) {
+inline TensorVec loop(size_t lbound, size_t ubound, size_t step, const TensorVec& operands, const TensorVec& results,
+                      edsl_source_location loc = edsl_source_location::current()) {
   if (operands.size() != results.size()) {
     throw ffi_exception("iter args don't equal to init args of scf", edsl_source_location::current());
   }
-  TensorVec args = {Tensor{lb}, Tensor{static_cast<int64_t>(hb)}, Tensor{step}};
-  args.insert(args.end(), operands.begin(), operands.end());
-  args.insert(args.end(), results.begin(), results.end());
-  return intrinsicCall("loop", args);
+
+  std::string op = "test";
+  std::vector<plaidml_expr*> rawOperands;
+  rawOperands.reserve(operands.size());
+  for (Tensor operand : operands) {
+    rawOperands.push_back(operand.as_ptr());
+  }
+
+  std::vector<plaidml_expr*> rawResults;
+  rawResults.reserve(results.size());
+  for (Tensor result : results) {
+    rawResults.push_back(result.as_ptr());
+  }
+  std::shared_ptr<plaidml_exprs> outerExprs;
+  outerExprs = details::make_ptr(  //
+      ffi::call<plaidml_exprs*>(   //
+          loc,                     //
+          plaidml_expr_loop,       //
+          op.c_str(),              //
+          lbound,                  //
+          ubound,                  //
+          step,                    //
+          rawOperands.size(),      //
+          rawOperands.data(),      //
+          rawResults.size(),       //
+          rawResults.data()));
+
+  TensorVec outerResults;
+  outerResults.reserve(outerExprs->size);
+  for (size_t i = 0; i < outerExprs->size; i++) {
+    plaidml_expr* expr = outerExprs->elts[i];
+    outerResults.push_back(Tensor{expr});
+  }
+  return outerResults;
 }
 
-// inline Tensor loop(int64_t loopCycle, const TensorVec& operands, const loopMultifunc& fn){
-//  return loop(loopCycle, fn());
-//}
+inline TensorVec loop(size_t lb, size_t hb, size_t step, const TensorVec& operands, const loopMultifunc& fn) {
+  return loop(lb, hb, step, operands, fn());
+}
 
 inline Tensor loop(size_t lb, size_t hb, size_t step, const TensorVec& operands, const loopSingefunc& fn) {
-  return loop(lb, hb, step, operands, {fn()});
+  return loop(lb, hb, step, operands, {fn()})[0];
 }
 
 }  // namespace edsl

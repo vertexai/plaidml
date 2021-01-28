@@ -233,6 +233,14 @@ private:
             push(node);
           }
         })
+        .Case<ExprNodeLoop>([&](ExprNodeLoop *expr) {
+          for (const ExprNodePtr &node : llvm::reverse(expr->results)) {
+            push(node);
+          }
+          for (const ExprNodePtr &node : llvm::reverse(expr->operands)) {
+            push(node);
+          }
+        })
         .Case<ExprNodeIntrinsic>([&](ExprNodeIntrinsic *expr) {
           // Push operands from right-to-left so they eventually get processed
           // in left-to-right order.
@@ -558,6 +566,8 @@ struct ProgramBuilder {
               })
               .Case<ExprNodeLayer>(
                   [&](ExprNodeLayer *node) { return handleLayer(node); })
+              .Case<ExprNodeLoop>(
+                  [&](ExprNodeLoop *node) { return handleLoop(node); })
               .Case<ExprNodePragma>(
                   [&](ExprNodePragma *node) { return handlePragma(node); });
       if (value) {
@@ -755,7 +765,7 @@ struct ProgramBuilder {
         .result();
   }
 
-  Value makeLoopOp(ExprNodeIntrinsic *node, ArrayRef<Value> operands) {
+  Value handleLoop(ExprNodeLoop *node) {
     /// the operands contain lowBound, upperBound, step, and loop-carried
     /// variables, and it's init Value
     if (operands.size() < 3) {
@@ -823,7 +833,7 @@ struct ProgramBuilder {
     for (const ExprNodePtr &node : traversal.getFlat()) {
       Value value = builder.lookupNode(node);
       // skip init value.
-      if (InitArgs.equals(value)){
+      if (InitArgs.equals(value)) {
         continue;
       }
       Operation *op = value.getDefiningOp();
