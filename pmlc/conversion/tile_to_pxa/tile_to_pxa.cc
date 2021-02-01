@@ -1963,7 +1963,6 @@ struct ScfForOpConversion : public OpConversionPattern<scf::ForOp> {
     for (unsigned i = 0; i < oldArgs.size(); ++i) {
       oldArgs[i].replaceAllUsesWith(newArgs[i]);
     }
-    newOp.dump();
     rewriter.replaceOp(op, newOp.results());
     return success();
   }

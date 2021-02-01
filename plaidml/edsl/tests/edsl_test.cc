@@ -1997,6 +1997,33 @@ TEST_F(CppEdsl, LoopConstantBuffer) {
   checkExact(program, {input}, {expected});
 }
 
+TEST_F(CppEdsl, LoopMultiIter) {
+  auto A = Placeholder(DType::FLOAT32, {4});
+  auto B = Placeholder(DType::FLOAT32, {4});
+  int64_t lb = 0;
+  int64_t hb = 5;
+  int64_t step = 1;
+  auto fn = [&]() -> TensorVec {
+    auto O = A + 1;
+    auto T = B + 1;
+    return {O, T};
+  };
+  auto output = loop(/*lowerBound*/ lb, /*upperBound*/ hb, /*step*/ step,  //
+                     /*loop-carried variable*/ {A, B}, /*loop inner function*/ fn);
+  auto O = output[0] + output[1];
+  auto program = makeProgram("loop", {A, B}, {O});
+  std::vector<float> input1 = {
+      1, 1, 1, 1  //
+  };
+  std::vector<float> input2 = {
+      0, 0, 0, 0  //
+  };
+  std::vector<float> expected1 = {
+      11, 11, 11, 11  //
+  };
+  checkExact(program, {input1, input2}, {expected1});
+}
+
 TEST_F(CppEdsl, Layer) {
   auto A = Placeholder(DType::FLOAT32, {10, 20});
   Tensor O = layer("relu", {A}, [&]() { return Relu(A); });

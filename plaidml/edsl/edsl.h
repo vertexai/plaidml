@@ -1687,8 +1687,7 @@ inline TensorVec layer(const std::string& op, const TensorVec& operands, const D
 
 inline Tensor layer(const std::string& op, const TensorVec& operands, const Dictionary& attrs,
                     const LayerBodySingleFn& fn, edsl_source_location loc = edsl_source_location::current()) {
-  return layer(
-      op, operands, attrs, [&]() { return TensorVec{fn()}; }, loc)[0];
+  return layer(op, operands, attrs, [&]() { return TensorVec{fn()}; }, loc)[0];
 }
 
 inline Tensor layer(const std::string& op, const TensorVec& operands, const LayerBodySingleFn& fn,
@@ -1730,14 +1729,14 @@ inline TensorVec loop(const TensorVec& loopIndex, const TensorVec& operands, con
   }
 
   Tensor array = Tensor{ffi::call<plaidml_expr*>(  //
-      loc,                                           //
-      plaidml_expr_loop,                             //
-      op.c_str(),                                    //
-      rawLoopIndex.size(),                           //
-      rawLoopIndex.data(),                           //
-      rawOperands.size(),                            //
-      rawOperands.data(),                            //
-      rawResults.size(),                             //
+      loc,                                         //
+      plaidml_expr_loop,                           //
+      op.c_str(),                                  //
+      rawLoopIndex.size(),                         //
+      rawLoopIndex.data(),                         //
+      rawOperands.size(),                          //
+      rawOperands.data(),                          //
+      rawResults.size(),                           //
       rawResults.data())};
 
   TensorVec output;

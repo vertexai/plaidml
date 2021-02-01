@@ -17,7 +17,8 @@
 #include "mlir/Support/DebugStringHelper.h"
 #include "mlir/Transforms/Passes.h"
 #include "mlir/Transforms/RegionUtils.h"
-#include "llvm/ADT/SetVector.h"
+#include "llvm/ADT/DenseSet.h"
+#include "llvm/ADT/SmallSet.h"
 #include "llvm/ADT/TypeSwitch.h"
 #include "llvm/Support/FormatVariadic.h"
 
@@ -788,16 +789,18 @@ struct ProgramBuilder {
       throw std::runtime_error(
           "In scfFor op, init Iter number have to equal Iter args");
     }
-    SmallVector<Value, 8> InitValue;
+    SmallVector<Value, 8> InitArgs;
     for (const ExprNodePtr &operand : node->operands) {
-      InitValue.push_back(builder.lookupNode(operand));
+      InitArgs.push_back(builder.lookupNode(operand));
     }
-    ArrayRef<Value> InitArgs(InitValue.begin(), InitValue.end());
-    SmallVector<Value, 8> resultValue;
+    DenseSet<Value> InitArgSet;
+    InitArgSet.insert(InitArgs.begin(), InitArgs.end());
+    SmallVector<Value, 8> resultArgs;
     for (const ExprNodePtr &result : node->results) {
-      resultValue.push_back(builder.lookupNode(result));
+      resultArgs.push_back(builder.lookupNode(result));
     }
-    ArrayRef<Value> resultArgs(resultValue.begin(), resultValue.end());
+    DenseSet<Value> resultArgSet;
+    resultArgSet.insert(resultArgs.begin(), resultArgs.end());
     // take loop-carried variables, and it's init Value
     AstTraversal traversal(results);
     auto scfForOp = builder.create<mlir::scf::ForOp>(
@@ -813,7 +816,7 @@ struct ProgramBuilder {
       mapper.map(outer, inner);
     }
     // choice the ops which should put to loop region.
-    std::vector<Value> affectValue(InitArgs);
+    std::vector<Value> affectValue(InitArgs.begin(), InitArgs.end());
     std::set<Operation *> innerLoopValue;
     int length = affectValue.size();
     int start = 0;
@@ -838,7 +841,7 @@ struct ProgramBuilder {
     for (const ExprNodePtr &node : traversal.getFlat()) {
       Value value = builder.lookupNode(node);
       // skip init value.
-      if (InitArgs.equals(value)) {
+      if (InitArgSet.count(value)) {
         continue;
       }
       Operation *op = value.getDefiningOp();
@@ -847,7 +850,7 @@ struct ProgramBuilder {
         continue;
       }
       Operation *clonedOp = bodyBuilder.clone(*op, mapper);
-      if (resultArgs.equals(value)) {
+      if (resultArgSet.count(value)) {
         yieldValue.push_back(clonedOp->getResult(0));
       }
       toRemove.insert(op);
