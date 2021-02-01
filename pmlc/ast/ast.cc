@@ -192,12 +192,12 @@ std::string ExprNodeLayer::str() const {
 //
 
 ExprNodeLoop::ExprNodeLoop(llvm::StringRef op,
-                           llvm::ArrayRef<ExprNodePtr> operands)
-    : op(op), operands(operands) {}
+                           llvm::ArrayRef<ExprNodePtr> indexs,
+                           llvm::ArrayRef<ExprNodePtr> operands,
+                           llvm::ArrayRef<ExprNodePtr> results)
+    : op(op), indexs(indexs), operands(operands), results(results) {}
 
-std::string ExprNodeLoop::str() const {
-  return llvm::formatv("loop({0})", op);
-}
+std::string ExprNodeLoop::str() const { return llvm::formatv("loop({0})", op); }
 
 //
 // ExprNodePragma

@@ -1706,53 +1706,55 @@ inline Tensor layer(const std::string& op, const TensorVec& operands, const Laye
 using loopSingefunc = std::function<Tensor()>;
 using loopMultifunc = std::function<TensorVec()>;
 
-inline TensorVec loop(size_t lbound, size_t ubound, size_t step, const TensorVec& operands, const TensorVec& results,
+inline TensorVec loop(const TensorVec& loopIndex, const TensorVec& operands, const TensorVec& results,
                       edsl_source_location loc = edsl_source_location::current()) {
   if (operands.size() != results.size()) {
     throw ffi_exception("iter args don't equal to init args of scf", edsl_source_location::current());
   }
 
-  std::string op = "test";
+  std::string op = "loop";
   std::vector<plaidml_expr*> rawOperands;
   rawOperands.reserve(operands.size());
   for (Tensor operand : operands) {
     rawOperands.push_back(operand.as_ptr());
   }
-
   std::vector<plaidml_expr*> rawResults;
   rawResults.reserve(results.size());
   for (Tensor result : results) {
     rawResults.push_back(result.as_ptr());
   }
-  std::shared_ptr<plaidml_exprs> outerExprs;
-  outerExprs = details::make_ptr(  //
-      ffi::call<plaidml_exprs*>(   //
-          loc,                     //
-          plaidml_expr_loop,       //
-          op.c_str(),              //
-          lbound,                  //
-          ubound,                  //
-          step,                    //
-          rawOperands.size(),      //
-          rawOperands.data(),      //
-          rawResults.size(),       //
-          rawResults.data()));
-
-  TensorVec outerResults;
-  outerResults.reserve(outerExprs->size);
-  for (size_t i = 0; i < outerExprs->size; i++) {
-    plaidml_expr* expr = outerExprs->elts[i];
-    outerResults.push_back(Tensor{expr});
+  std::vector<plaidml_expr*> rawLoopIndex;
+  rawLoopIndex.reserve(loopIndex.size());
+  for (Tensor index : loopIndex) {
+    rawLoopIndex.push_back(index.as_ptr());
   }
-  return outerResults;
+
+  Tensor array = Tensor{ffi::call<plaidml_expr*>(  //
+      loc,                                           //
+      plaidml_expr_loop,                             //
+      op.c_str(),                                    //
+      rawLoopIndex.size(),                           //
+      rawLoopIndex.data(),                           //
+      rawOperands.size(),                            //
+      rawOperands.data(),                            //
+      rawResults.size(),                             //
+      rawResults.data())};
+
+  TensorVec output;
+  for (auto i = 0; i < results.size(); i++) {
+    output.push_back(array.element(i));
+  }
+  return output;
 }
 
-inline TensorVec loop(size_t lb, size_t hb, size_t step, const TensorVec& operands, const loopMultifunc& fn) {
-  return loop(lb, hb, step, operands, fn());
+inline TensorVec loop(int64_t lb, int64_t hb, int64_t step, const TensorVec& operands, const loopMultifunc& fn) {
+  TensorVec index{Tensor(lb), Tensor(hb), Tensor(step)};
+  return loop(index, operands, fn());
 }
 
-inline Tensor loop(size_t lb, size_t hb, size_t step, const TensorVec& operands, const loopSingefunc& fn) {
-  return loop(lb, hb, step, operands, {fn()})[0];
+inline Tensor loop(int64_t lb, int64_t hb, int64_t step, const TensorVec& operands, const loopSingefunc& fn) {
+  TensorVec index{Tensor(lb), Tensor(hb), Tensor(step)};
+  return loop(index, operands, {fn()})[0];
 }
 
 }  // namespace edsl

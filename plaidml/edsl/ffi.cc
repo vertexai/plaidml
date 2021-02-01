@@ -849,40 +849,34 @@ plaidml_exprs* plaidml_expr_layer_end(  //
   });
 }
 
-plaidml_exprs* plaidml_expr_loop(  //
+plaidml_expr* plaidml_expr_loop(  //
     plaidml_error* err,            //
     const char* op,                //
-    size_t lbound,                 //
-    size_t ubound,                 //
-    size_t step,                   //
+    size_t nindex,                 //
+    plaidml_expr** indexs,         //
     size_t ninputs,                //
     plaidml_expr** inputs,         //
     size_t noutputs,               //
     plaidml_expr** outputs) {
-  return ffi_wrap<plaidml_exprs*>(err, nullptr, [&] {
+  return ffi_wrap<plaidml_expr*>(err, nullptr, [&] {
     IVLOG(3, "plaidml_expr_loop (" << op << ", inputs: " << ninputs << ")");
     std::vector<ast::ExprNodePtr> operands(ninputs);
     for (size_t i = 0; i < ninputs; i++) {
       operands[i] = inputs[i]->node;
     }
-    auto node = std::make_shared<ast::ExprNodeLoop>(op, operands, attrs);
-    LayerContext::get()->addNode(node);
-    LayerContext::get()->push(node);
-    return new plaidml_expr{node};
-    auto node = std::dynamic_pointer_cast<ast::ExprNodeLayer>(expr->node);
-    if (!node) {
-      throw std::bad_cast();
-    }
-    LayerContext::get()->pop();
-    std::vector<ast::ExprNodePtr> outerResults;
-    outerResults.reserve(noutputs);
-    node->results.clear();
-    node->results.reserve(noutputs);
+    std::vector<ast::ExprNodePtr> results(noutputs);
     for (size_t i = 0; i < noutputs; i++) {
-      node->results.push_back(outputs[i]->node);
-      outerResults.push_back(std::make_shared<ast::ExprNodeElement>(node, i));
+      results[i] = outputs[i]->node;
     }
-    return ffi_vector<plaidml_exprs, plaidml_expr>(outerResults);
+    std::vector<ast::ExprNodePtr> loopIndex(nindex);
+    for (size_t i = 0; i < nindex; i++) {
+      loopIndex[i] = indexs[i]->node;
+    }
+    auto node = std::make_shared<ast::ExprNodeLoop>(op, loopIndex, operands, results);
+    ast::Evaluator evaluator;
+    evaluator.verify(node);
+    LayerContext::get()->addNode(node);
+    return new plaidml_expr{node};
   });
 }
 

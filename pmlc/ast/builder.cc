@@ -234,10 +234,13 @@ private:
           }
         })
         .Case<ExprNodeLoop>([&](ExprNodeLoop *expr) {
+          for (const ExprNodePtr &node : llvm::reverse(expr->operands)) {
+            push(node);
+          }
           for (const ExprNodePtr &node : llvm::reverse(expr->results)) {
             push(node);
           }
-          for (const ExprNodePtr &node : llvm::reverse(expr->operands)) {
+          for (const ExprNodePtr &node : llvm::reverse(expr->indexs)) {
             push(node);
           }
         })
@@ -682,7 +685,6 @@ struct ProgramBuilder {
             .Case("reshape", [&]() { return makeReshapeOp(node, operands); })
             .Case("scatter", [&]() { return makeScatterOp(node, operands); })
             .Case("gather", [&]() { return makeGatherOp(node, operands); })
-            .Case("loop", [&]() { return makeLoopOp(node, operands); })
             .Default([&]() {
               const AbstractOperation *abstractOp = lookupOperation(node->op);
               OperationState state(loc, abstractOp->name);
@@ -766,43 +768,46 @@ struct ProgramBuilder {
   }
 
   Value handleLoop(ExprNodeLoop *node) {
-    /// the operands contain lowBound, upperBound, step, and loop-carried
-    /// variables, and it's init Value
-    if (operands.size() < 3) {
-      throw std::runtime_error(
-          "'index' primitive expects at least one operand");
-    }
     // take lowBound, upperBound, step from operands.
-    auto indices = operands.take_front(3);
-    SmallVector<Value, 4> indexTypeIndices;
+    auto indexs = node->indexs;
+    if (indexs.size() != 3) {
+      throw std::runtime_error(
+          "please check the index of loop, lbound, ubound and step");
+    }
     auto indexType = builder.getIndexType();
-    for (auto bounder : indices) {
-      indexTypeIndices.push_back(
-          builder.create<mlir::IndexCastOp>(loc, bounder, indexType));
+    std::vector<Value> indexValue;
+    for (auto index : indexs) {
+      auto indexNum = builder.create<mlir::IndexCastOp>(
+          loc, builder.lookupNode(index), indexType);
+      indexValue.push_back(indexNum);
     }
 
-    auto loopCarriedVar = operands.drop_front(3);
-    if (loopCarriedVar.size() % 2) {
+    auto operands = node->operands;
+    auto results = node->results;
+    if (operands.size() != results.size()) {
       throw std::runtime_error(
           "In scfFor op, init Iter number have to equal Iter args");
     }
+    SmallVector<Value, 8> InitValue;
+    for (const ExprNodePtr &operand : node->operands) {
+      InitValue.push_back(builder.lookupNode(operand));
+    }
+    ArrayRef<Value> InitArgs(InitValue.begin(), InitValue.end());
+    SmallVector<Value, 8> resultValue;
+    for (const ExprNodePtr &result : node->results) {
+      resultValue.push_back(builder.lookupNode(result));
+    }
+    ArrayRef<Value> resultArgs(resultValue.begin(), resultValue.end());
     // take loop-carried variables, and it's init Value
-    auto IterNum = loopCarriedVar.size() / 2;
-    auto InitArgs = loopCarriedVar.take_front(IterNum);
-    auto IterArgs = loopCarriedVar.drop_front(IterNum);
-    std::vector<ExprNodePtr> loopContext(node->operands.begin() + IterNum + 3,
-                                         node->operands.end());
-
-    AstTraversal traversal(loopContext);
+    AstTraversal traversal(results);
     auto scfForOp = builder.create<mlir::scf::ForOp>(
-        loc, indexTypeIndices[0], indexTypeIndices[1], indexTypeIndices[2],
-        InitArgs);
-
+        loc, indexValue[0], indexValue[1], indexValue[2], InitArgs);
     OpBuilder bodyBuilder(scfForOp.getLoopBody());
     llvm::SetVector<Operation *> toRemove;
+    // replace the value by loop loop-carried variables.
     BlockAndValueMapping mapper;
-    auto IterVaules = scfForOp.getRegionIterArgs();
-    for (auto tuple : llvm::zip(InitArgs, IterVaules)) {
+    auto rawIterArgs = scfForOp.getRegionIterArgs();
+    for (auto tuple : llvm::zip(InitArgs, rawIterArgs)) {
       Value outer, inner;
       std::tie(outer, inner) = tuple;
       mapper.map(outer, inner);
@@ -842,7 +847,7 @@ struct ProgramBuilder {
         continue;
       }
       Operation *clonedOp = bodyBuilder.clone(*op, mapper);
-      if (IterArgs.equals(value)) {
+      if (resultArgs.equals(value)) {
         yieldValue.push_back(clonedOp->getResult(0));
       }
       toRemove.insert(op);
@@ -852,7 +857,12 @@ struct ProgramBuilder {
     for (Operation *op : toRemove) {
       op->erase();
     }
-    return scfForOp.results()[0];
+    SmallVector<Value, 4> tuple;
+    for (OpResult result : scfForOp.getResults()) {
+      tuple.push_back(result);
+    }
+    builder.exprTuples[node] = tuple;
+    return nullptr;
   }
 
   Value makeGatherOp(ExprNodeIntrinsic *node, ArrayRef<Value> operands) {
