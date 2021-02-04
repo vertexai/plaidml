@@ -37,7 +37,7 @@ def PadConstraints : FunctionPass<"tile-pad-constraints"> {
 }
 
 def ScfForReplace : FunctionPass<"tile-scf-replaceArgument"> {
-  let summary = "Pad outputs to remove constraints on inputs";
+  let summary = "replace the alloc inside scf by function argument";
   let constructor = "pmlc::dialect::tile::createScfForReplacePass()";
 }
 
