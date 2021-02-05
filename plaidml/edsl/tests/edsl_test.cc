@@ -2037,25 +2037,46 @@ TEST_F(CppEdsl, LoopWithBeforeOp) {
                        return {C + constNode, D * 5};
                      });
   auto program = makeProgram("loop", {A, B}, output);
-  runProgram(program);
+  std::vector<float> input1 = {
+      1, 1, 1, 1  //
+  };
+  std::vector<float> input2 = {
+      1, 1, 1, 1  //
+  };
+  std::vector<float> expected1 = {
+      6, 6, 6, 6  //
+  };
+  std::vector<float> expected2 = {
+      1250, 1250, 1250, 1250  //
+  };
+  checkExact(program, {input1, input2}, {expected1, expected2});
 }
 
 TEST_F(CppEdsl, LoopWithAfterOp) {
   auto A = Placeholder(DType::FLOAT32, {4});
   auto B = Placeholder(DType::FLOAT32, {4});
   auto C = A + 1;
-  auto temp = loop(/*lowerBound*/ 0, /*upperBound*/ 10, /*step*/ 3,  //
+  auto temp = loop(/*lowerBound*/ 0, /*upperBound*/ 10, /*step*/ 2,  //
                      /*loop-carried variable*/ {C},                    //
                      [&](){
-                       std::vector<float> test{1, 1, 1, 1};
+                       std::vector<float> test{1, 1, 2, 2};
                        auto constNode = Constant(makeBuffer(DType::FLOAT32, {4}, test), "test");
                        return C + constNode;
                      });
   auto output = temp + B;
   auto program = makeProgram("loop", {A, B}, {output});
-  runProgram(program);
+  std::vector<float> input1 = {
+      1, 1, 1, 1  //
+  };
+  std::vector<float> input2 = {
+      2, 2, 2, 2  //
+  };
+  std::vector<float> expected1 = {
+      9, 9, 14, 14  //
+  };
+  checkExact(program, {input1, input2}, {expected1});
 }
-/// if loop-carried variable is INT32, will run into type error.
+/// if loop-carried variable is INT32, will run into type conversion error.
 // TEST_F(CppEdsl, LoopDraftSequence) {
 //  auto A = Placeholder(DType::FLOAT32, {2, 4});
 //  auto B = Placeholder(DType::FLOAT32, {1, 4});
@@ -2076,14 +2097,14 @@ TEST_F(CppEdsl, LoopWithAfterOp) {
 //  auto program = makeProgram("loop", {A, B}, {output[2]});
 //  std::vector<float> input = {
 //      1, 1, 1, 1,  //
-//      1, 1, 1, 1   //
+//      2, 2, 2, 2   //
 //  };
 //  std::vector<float> b = {
 //      2, 2, 2, 2  //
 //  };
 //  std::vector<float> expected = {
 //      2, 2, 2, 2,  //
-//      2, 2, 2, 2,  //
+//      4, 4, 4, 4,  //
 //  };
 //  checkExact(program, {input, b}, {expected});
 //}
