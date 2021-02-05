@@ -2024,6 +2024,70 @@ TEST_F(CppEdsl, LoopMultiIter) {
   checkExact(program, {input1, input2}, {expected1});
 }
 
+TEST_F(CppEdsl, LoopWithBeforeOp) {
+  auto A = Placeholder(DType::FLOAT32, {4});
+  auto B = Placeholder(DType::FLOAT32, {4});
+  auto C = A + 1;
+  auto D = C * B;
+  auto output = loop(/*lowerBound*/ 0, /*upperBound*/ 10, /*step*/ 3,  //
+                     /*loop-carried variable*/ {C, D},                 //
+                     [&]() -> TensorVec {
+                       std::vector<float> test{1, 1, 1, 1};
+                       auto constNode = Constant(makeBuffer(DType::FLOAT32, {4}, test), "test");
+                       return {C + constNode, D * 5};
+                     });
+  auto program = makeProgram("loop", {A, B}, output);
+  runProgram(program);
+}
+
+TEST_F(CppEdsl, LoopWithAfterOp) {
+  auto A = Placeholder(DType::FLOAT32, {4});
+  auto B = Placeholder(DType::FLOAT32, {4});
+  auto C = A + 1;
+  auto temp = loop(/*lowerBound*/ 0, /*upperBound*/ 10, /*step*/ 3,  //
+                     /*loop-carried variable*/ {C},                    //
+                     [&](){
+                       std::vector<float> test{1, 1, 1, 1};
+                       auto constNode = Constant(makeBuffer(DType::FLOAT32, {4}, test), "test");
+                       return C + constNode;
+                     });
+  auto output = temp + B;
+  auto program = makeProgram("loop", {A, B}, {output});
+  runProgram(program);
+}
+/// if loop-carried variable is INT32, will run into type error.
+// TEST_F(CppEdsl, LoopDraftSequence) {
+//  auto A = Placeholder(DType::FLOAT32, {2, 4});
+//  auto B = Placeholder(DType::FLOAT32, {1, 4});
+//  std::vector<float> data(8, 0);
+//  auto O = Constant(makeBuffer(DType::FLOAT32, {2, 4}, data), "O");
+//
+//  auto slice_index = cast(index({TensorDim(1)}, 0), DType::INT32);
+//
+//  auto fn = [&]() -> TensorVec {
+//    Tensor piece = gather(A, slice_index).axis(0);
+//    auto temp = piece * B;
+//    Tensor out = scatter(O, slice_index, temp).mode(ScatterMode::UPDATE_SLICE);
+//    return {slice_index+1, temp, out};
+//  };
+//  auto output = loop(/*lowerBound*/ 0, /*upperBound*/ 2, /*step*/ 1,  //
+//                     /*loop-carried variable*/ {slice_index, B, O},                //
+//                     fn);
+//  auto program = makeProgram("loop", {A, B}, {output[2]});
+//  std::vector<float> input = {
+//      1, 1, 1, 1,  //
+//      1, 1, 1, 1   //
+//  };
+//  std::vector<float> b = {
+//      2, 2, 2, 2  //
+//  };
+//  std::vector<float> expected = {
+//      2, 2, 2, 2,  //
+//      2, 2, 2, 2,  //
+//  };
+//  checkExact(program, {input, b}, {expected});
+//}
+
 TEST_F(CppEdsl, Layer) {
   auto A = Placeholder(DType::FLOAT32, {10, 20});
   Tensor O = layer("relu", {A}, [&]() { return Relu(A); });
