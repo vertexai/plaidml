@@ -75,6 +75,9 @@ unsigned typeScore(Type type) {
   if (type.isUnsignedInteger(32)) {
     return 10;
   }
+  if (type.isSignlessInteger(32)) {
+    return 10;
+  }
   if (type.isSignedInteger(64)) {
     return 11;
   }
