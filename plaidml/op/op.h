@@ -19,7 +19,10 @@ inline void init() {
 namespace details {
 
 inline edsl::Value op(const std::string& name, const edsl::Value& args) {
-  return edsl::Value(ffi::call<plaidml_value*>(plaidml_op_make, name.c_str(), args.as_ptr()));
+  auto val = ffi::call<plaidml_value*>(plaidml_op_make, name.c_str(), args.as_ptr());
+  auto ret = edsl::Value(val);
+  ffi::call_void(plaidml_value_free, val);
+  return ret;
 }
 
 }  // namespace details

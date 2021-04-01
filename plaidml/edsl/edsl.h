@@ -203,7 +203,9 @@ class TensorIndex {
       operands.emplace_back(dim_ptr);
       operands.emplace_back(idx.as_ptr());
     }
-    return ffi::call<plaidml_poly_expr*>(loc, plaidml_poly_expr_op, op, operands.size(), operands.data());
+    auto ret = ffi::call<plaidml_poly_expr*>(loc, plaidml_poly_expr_op, op, operands.size(), operands.data());
+    ffi::call_void(plaidml_poly_expr_free, dim_ptr);
+    return ret;
   }
 
  private:

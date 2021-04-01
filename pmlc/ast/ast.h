@@ -10,6 +10,7 @@
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/StringMap.h"
+#include "llvm/ADT/TypeSwitch.h"
 
 #include "pmlc/util/buffer.h"
 #include "pmlc/util/enums.h"
@@ -187,16 +188,6 @@ struct ExprNodeDim : NodeBase<ExprNodeDim, ExprNode> {
   std::string str() const final;
 };
 
-struct ExprNodeElement : NodeBase<ExprNodeElement, ExprNode> {
-  using Base = NodeBase<ExprNodeElement, ExprNode>;
-
-  ExprNodePtr expr;
-  size_t ordinal;
-
-  ExprNodeElement(const ExprNodePtr &expr, size_t ordinal);
-  std::string str() const final;
-};
-
 struct ExprNodeInput : NodeBase<ExprNodeInput, ExprNode> {
   using Base = NodeBase<ExprNodeInput, ExprNode>;
 
@@ -240,6 +231,37 @@ struct ExprNodePragma : NodeBase<ExprNodePragma, ExprNode> {
   ExprNodePragma(const ExprNodePtr &expr, llvm::StringRef op,
                  const llvm::StringMap<VarNodePtr> &attrs);
   std::string str() const final;
+};
+
+struct ExprNodeElement : NodeBase<ExprNodeElement, ExprNode> {
+  using Base = NodeBase<ExprNodeElement, ExprNode>;
+
+  ExprNodePtr expr;
+  size_t ordinal;
+
+  ExprNodeElement(const ExprNodePtr &expr, size_t ordinal);
+  std::string str() const final;
+
+  ~ExprNodeElement(){
+    llvm::TypeSwitch<ExprNode *, void>(expr.get())
+      .Case<ExprNodeCast>([&](ExprNodeCast *expr) { })
+      .Case<ExprNodeConstSigned>([&](ExprNodeConstSigned *expr) { })
+      .Case<ExprNodeConstUnsigned>([&](ExprNodeConstUnsigned *expr) { })
+      .Case<ExprNodeConstFloat>([&](ExprNodeConstFloat *expr) { })
+      .Case<ExprNodeConstTensor>([&](ExprNodeConstTensor *expr) { })
+      .Case<ExprNodeContraction>([&](ExprNodeContraction *expr) { })
+      .Case<ExprNodeDim>([&](ExprNodeDim *expr) { })
+      .Case<ExprNodeElement>([&](ExprNodeElement *expr) { })
+      .Case<ExprNodeInput>([&](ExprNodeInput *expr) { })
+      .Case<ExprNodeIntrinsic>([&](ExprNodeIntrinsic *expr) {
+        expr->operands.clear();
+      })
+      .Case<ExprNodeLayer>([&](ExprNodeLayer *expr) {
+        expr->operands.clear();
+        expr->results.clear();
+      })
+      .Case<ExprNodePragma>([&](ExprNodePragma *expr) { });
+  }
 };
 
 //
