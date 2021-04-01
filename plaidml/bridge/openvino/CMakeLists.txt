@@ -1,6 +1,8 @@
 set(OUTPUT_ROOT ${CMAKE_BINARY_DIR})
 
-find_package(InferenceEngineDeveloperPackage QUIET)
+if(NOT InferenceEngineDeveloperPackage_FOUND)
+  find_package(InferenceEngineDeveloperPackage REQUIRED)
+endif()
 
 file(GLOB_RECURSE _OPS_SRCS CONFIGURE_DEPENDS "ops/*.cpp")
 
@@ -49,7 +51,7 @@ install(
     ${OUTPUT_ROOT}/bin/libplaidml.so.1
     ${OpenVINO_MAIN_SOURCE_DIR}/${BIN_FOLDER}/lib/libformat_reader.so
     ${IE_MAIN_SOURCE_DIR}/temp/tbb/lib/libtbb.so.2
-    ${LLVM_BINARY_DIR}/lib/libmlir_runner_utils.so.12git
+    ${LLVM_BINARY_DIR}/lib/libmlir_runner_utils.so.13git
     ${LLVM_BINARY_DIR}/lib/libomp.so
   DESTINATION "testkit"
   COMPONENT testkit

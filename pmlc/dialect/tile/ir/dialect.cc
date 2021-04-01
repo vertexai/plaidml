@@ -90,16 +90,17 @@ void TileDialect::printType(Type type, DialectAsmPrinter &printer) const {
 }
 
 Type TileDialect::parseType(DialectAsmParser &parser) const {
-  Location loc = parser.getEncodedSourceLoc(parser.getNameLoc());
-
   StringRef typeKeyword;
   if (failed(parser.parseKeyword(&typeKeyword)))
     return nullptr;
 
+  MLIRContext *context = parser.getBuilder().getContext();
   return llvm::StringSwitch<function_ref<Type()>>(typeKeyword)
-      .Case("fx", [&] { return APFloatType::getChecked(loc); })
-      .Case("six", [&] { return APSignedIntegerType::getChecked(loc); })
-      .Case("uix", [&] { return APUnsignedIntegerType::getChecked(loc); })
+      .Case("fx", [&] { return parser.getChecked<APFloatType>(context); })
+      .Case("six",
+            [&] { return parser.getChecked<APSignedIntegerType>(context); })
+      .Case("uix",
+            [&] { return parser.getChecked<APUnsignedIntegerType>(context); })
       .Default([&] {
         parser.emitError(parser.getNameLoc(),
                          "Unsupported 'eltwise' type: " + typeKeyword);

@@ -310,7 +310,8 @@ void CachePlan::addLoad(PxaLoadOp op) {
   Entry entry{*maybeRap};
   auto [it, isNew] = entries.insert(std::make_pair(memref, entry));
   if (!isNew) {
-    it->second.rap.unionMerge(*maybeRap);
+    // TODO: check LogicalResult
+    (void)it->second.rap.unionMerge(*maybeRap);
   }
   it->second.loads.push_back(LoadInfo{op, *maybeRap});
 }
@@ -329,7 +330,8 @@ void CachePlan::addReduce(PxaReduceOp op) {
   Entry entry{*maybeRap};
   auto [it, isNew] = entries.insert(std::make_pair(memref, entry));
   if (!isNew) {
-    it->second.rap.unionMerge(*maybeRap);
+    // TODO: check LogicalResult
+    (void)it->second.rap.unionMerge(*maybeRap);
   }
   it->second.reduces.push_back(ReduceInfo{op, *maybeRap});
 }

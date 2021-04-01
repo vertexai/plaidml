@@ -146,12 +146,12 @@ void ContractionOp::setSources(ArrayRef<AffineMap> srcs) {
   for (auto src : srcs) {
     attrs.push_back(AffineMapAttr::get(src));
   }
-  (*this)->setAttr(getSourcesAttrName(), ArrayAttr::get(attrs, getContext()));
+  (*this)->setAttr(getSourcesAttrName(), ArrayAttr::get(getContext(), attrs));
 }
 
 void ContractionOp::setConstraints(IntegerSet cons) {
   if (cons.isEmptyIntegerSet()) {
-    removeAttr(getConstraintsAttrName());
+    (*this)->removeAttr(getConstraintsAttrName());
   } else {
     (*this)->setAttr(getConstraintsAttrName(), IntegerSetAttr::get(cons));
   }

@@ -6,8 +6,8 @@ module {
   //       CHECK:   %[[ENV:.*]] = llvm.call @ocl_create_execenv(%[[DEV]])
   //       CHECK:   llvm.call @ocl_destroy_execenv(%[[ENV]])
   func @create_destroy(%dev: !comp.device) {
-    %env = comp.create_execenv %dev : (!comp.device) -> !comp.execenv<ocl:0,(11)>
-    comp.destroy_execenv %env : !comp.execenv<ocl:0,(11)>
+    %env = comp.create_execenv %dev : (!comp.device) -> !comp.execenv<ocl:0, [11]>
+    comp.destroy_execenv %env : !comp.execenv<ocl:0, [11]>
     return
   }
 }
@@ -25,11 +25,11 @@ module {
   //       CHECK:   llvm.call @ocl_wait(%[[CST1]], %[[EV]])
   //       CHECK:   llvm.call @ocl_destroy_execenv(%[[ENV]])
   func @no_gpu_func(%dev: !comp.device) {
-    %env = comp.create_execenv %dev : (!comp.device) -> !comp.execenv<ocl:0,(11)>
-    %ev = comp.schedule_barrier %env : (!comp.execenv<ocl:0,(11)>) -> !comp.event<ocl>
-    comp.submit %env : !comp.execenv<ocl:0,(11)>
+    %env = comp.create_execenv %dev : (!comp.device) -> !comp.execenv<ocl:0, [11]>
+    %ev = comp.schedule_barrier %env : (!comp.execenv<ocl:0, [11]>) -> !comp.event<ocl>
+    comp.submit %env : !comp.execenv<ocl:0, [11]>
     comp.wait %ev : !comp.event<ocl>
-    comp.destroy_execenv %env : !comp.execenv<ocl:0,(11)>
+    comp.destroy_execenv %env : !comp.execenv<ocl:0, [11]>
     return
   }
 }
@@ -44,10 +44,10 @@ module {
   //       CHECK:   llvm.call @ocl_dealloc(%[[ENV]], %{{.*}})
   //       CHECK:   llvm.call @ocl_destroy_execenv(%[[ENV]])
   func @alloc_dealloc(%dev: !comp.device) {
-    %env = comp.create_execenv %dev : (!comp.device) -> !comp.execenv<ocl:0,(11)>
-    %mem = comp.alloc %env : (!comp.execenv<ocl:0,(11)>) -> memref<8x32xf32, 11>
-    comp.dealloc %env %mem : (!comp.execenv<ocl:0,(11)>, memref<8x32xf32, 11>) -> ()
-    comp.destroy_execenv %env : !comp.execenv<ocl:0,(11)>
+    %env = comp.create_execenv %dev : (!comp.device) -> !comp.execenv<ocl:0, [11]>
+    %mem = comp.alloc %env : (!comp.execenv<ocl:0, [11]>) -> memref<8x32xf32, 11>
+    comp.dealloc %env %mem : (!comp.execenv<ocl:0, [11]>, memref<8x32xf32, 11>) -> ()
+    comp.destroy_execenv %env : !comp.execenv<ocl:0, [11]>
     return
   }
 }
@@ -74,23 +74,23 @@ module attributes {gpu.container_module} {
     %c8 = constant 8 : index
     %c32 = constant 32 : index
     %c1 = constant 1 : index
-    %env = comp.create_execenv %dev : (!comp.device) -> !comp.execenv<ocl:0,(11)>
-    %mem0 = comp.alloc %env : (!comp.execenv<ocl:0,(11)>) -> memref<8x32xf32, 11>
-    %wev = comp.schedule_write %arg0 to %mem0 on %env : (memref<8x32xf32>, memref<8x32xf32, 11>, !comp.execenv<ocl:0,(11)>) -> !comp.event<ocl>
-    %ker = comp.create_kernel on %env {kernelFunc = @gpu_module::@zero} : (!comp.execenv<ocl:0,(11)>) -> !comp.kernel
-    %fev = comp.schedule_compute %ker grid %c8, %c1, %c1 block %c32, %c1, %c1 args %mem0 on %env wait for %wev : (!comp.execenv<ocl:0,(11)>, !comp.kernel, index, index, index, index, index, index, memref<8x32xf32, 11>, !comp.event<ocl>) -> !comp.event<ocl>
-    %rev = comp.schedule_read %arg0 from %mem0 on %env wait for %fev : (memref<8x32xf32>, memref<8x32xf32, 11>, !comp.execenv<ocl:0,(11)>, !comp.event<ocl>) -> !comp.event<ocl>
+    %env = comp.create_execenv %dev : (!comp.device) -> !comp.execenv<ocl:0, [11]>
+    %mem0 = comp.alloc %env : (!comp.execenv<ocl:0, [11]>) -> memref<8x32xf32, 11>
+    %wev = comp.schedule_write %arg0 to %mem0 on %env : (memref<8x32xf32>, memref<8x32xf32, 11>, !comp.execenv<ocl:0, [11]>) -> !comp.event<ocl>
+    %ker = comp.create_kernel on %env {kernelFunc = @gpu_module::@zero} : (!comp.execenv<ocl:0, [11]>) -> !comp.kernel
+    %fev = comp.schedule_compute %ker grid %c8, %c1, %c1 block %c32, %c1, %c1 args %mem0 on %env wait for %wev : (!comp.execenv<ocl:0, [11]>, !comp.kernel, index, index, index, index, index, index, memref<8x32xf32, 11>, !comp.event<ocl>) -> !comp.event<ocl>
+    %rev = comp.schedule_read %arg0 from %mem0 on %env wait for %fev : (memref<8x32xf32>, memref<8x32xf32, 11>, !comp.execenv<ocl:0, [11]>, !comp.event<ocl>) -> !comp.event<ocl>
     comp.wait %rev : !comp.event<ocl>
-    comp.dealloc %env %mem0 : (!comp.execenv<ocl:0,(11)>, memref<8x32xf32, 11>) -> ()
-    comp.destroy_kernel %ker on %env : (!comp.execenv<ocl:0,(11)>, !comp.kernel) -> ()
-    comp.destroy_execenv %env : !comp.execenv<ocl:0,(11)>
+    comp.dealloc %env %mem0 : (!comp.execenv<ocl:0, [11]>, memref<8x32xf32, 11>) -> ()
+    comp.destroy_kernel %ker on %env : (!comp.execenv<ocl:0, [11]>, !comp.kernel) -> ()
+    comp.destroy_execenv %env : !comp.execenv<ocl:0, [11]>
     return
   }
   // CHECK-NOT: spv.module
   // CHECK-NOT: gpu.module
   spv.module Physical64 OpenCL requires #spv.vce<v1.0, [Addresses, Kernel], []> {
-    spv.globalVariable @__builtin_var_LocalInvocationId__ built_in("LocalInvocationId") : !spv.ptr<vector<3xi32>, Input>
-    spv.globalVariable @__builtin_var_WorkgroupId__ built_in("WorkgroupId") : !spv.ptr<vector<3xi32>, Input>
+    spv.GlobalVariable @__builtin_var_LocalInvocationId__ built_in("LocalInvocationId") : !spv.ptr<vector<3xi32>, Input>
+    spv.GlobalVariable @__builtin_var_WorkgroupId__ built_in("WorkgroupId") : !spv.ptr<vector<3xi32>, Input>
     spv.func @zero(%arg0: !spv.ptr<!spv.struct<(!spv.array<256 x f32, stride=4> [0])>, CrossWorkgroup>) "None" attributes {
       spv.entry_point_abi = {local_size = dense<[32, 1, 1]> : vector<3xi32>},
       workgroup_attributions = 0 : i64
@@ -131,23 +131,23 @@ module attributes {gpu.container_module} {
     %c8 = constant 8 : index
     %c32 = constant 32 : index
     %c1 = constant 1 : index
-    %env = comp.create_execenv %dev : (!comp.device) -> !comp.execenv<ocl:0,(11)>
-    %mem0 = comp.alloc %env : (!comp.execenv<ocl:0,(11)>) -> memref<8x32xf16, 11>
-    %wev = comp.schedule_write %arg0 to %mem0 on %env : (memref<8x32xf16>, memref<8x32xf16, 11>, !comp.execenv<ocl:0,(11)>) -> !comp.event<ocl>
-    %ker = comp.create_kernel on %env {kernelFunc = @gpu_module::@zero} : (!comp.execenv<ocl:0,(11)>) -> !comp.kernel
-    %fev = comp.schedule_compute %ker grid %c8, %c1, %c1 block %c32, %c1, %c1 args %mem0 on %env wait for %wev : (!comp.execenv<ocl:0,(11)>, !comp.kernel, index, index, index, index, index, index, memref<8x32xf16, 11>, !comp.event<ocl>) -> !comp.event<ocl>
-    %rev = comp.schedule_read %arg0 from %mem0 on %env wait for %fev : (memref<8x32xf16>, memref<8x32xf16, 11>, !comp.execenv<ocl:0,(11)>, !comp.event<ocl>) -> !comp.event<ocl>
+    %env = comp.create_execenv %dev : (!comp.device) -> !comp.execenv<ocl:0, [11]>
+    %mem0 = comp.alloc %env : (!comp.execenv<ocl:0, [11]>) -> memref<8x32xf16, 11>
+    %wev = comp.schedule_write %arg0 to %mem0 on %env : (memref<8x32xf16>, memref<8x32xf16, 11>, !comp.execenv<ocl:0, [11]>) -> !comp.event<ocl>
+    %ker = comp.create_kernel on %env {kernelFunc = @gpu_module::@zero} : (!comp.execenv<ocl:0, [11]>) -> !comp.kernel
+    %fev = comp.schedule_compute %ker grid %c8, %c1, %c1 block %c32, %c1, %c1 args %mem0 on %env wait for %wev : (!comp.execenv<ocl:0, [11]>, !comp.kernel, index, index, index, index, index, index, memref<8x32xf16, 11>, !comp.event<ocl>) -> !comp.event<ocl>
+    %rev = comp.schedule_read %arg0 from %mem0 on %env wait for %fev : (memref<8x32xf16>, memref<8x32xf16, 11>, !comp.execenv<ocl:0, [11]>, !comp.event<ocl>) -> !comp.event<ocl>
     comp.wait %rev : !comp.event<ocl>
-    comp.dealloc %env %mem0 : (!comp.execenv<ocl:0,(11)>, memref<8x32xf16, 11>) -> ()
-    comp.destroy_kernel %ker on %env : (!comp.execenv<ocl:0,(11)>, !comp.kernel) -> ()
-    comp.destroy_execenv %env : !comp.execenv<ocl:0,(11)>
+    comp.dealloc %env %mem0 : (!comp.execenv<ocl:0, [11]>, memref<8x32xf16, 11>) -> ()
+    comp.destroy_kernel %ker on %env : (!comp.execenv<ocl:0, [11]>, !comp.kernel) -> ()
+    comp.destroy_execenv %env : !comp.execenv<ocl:0, [11]>
     return
   }
   // CHECK-NOT: spv.module
   // CHECK-NOT: gpu.module
   spv.module Physical64 OpenCL requires #spv.vce<v1.0, [Addresses, Kernel], []> {
-    spv.globalVariable @__builtin_var_LocalInvocationId__ built_in("LocalInvocationId") : !spv.ptr<vector<3xi32>, Input>
-    spv.globalVariable @__builtin_var_WorkgroupId__ built_in("WorkgroupId") : !spv.ptr<vector<3xi32>, Input>
+    spv.GlobalVariable @__builtin_var_LocalInvocationId__ built_in("LocalInvocationId") : !spv.ptr<vector<3xi32>, Input>
+    spv.GlobalVariable @__builtin_var_WorkgroupId__ built_in("WorkgroupId") : !spv.ptr<vector<3xi32>, Input>
     spv.func @zero(%arg0: !spv.ptr<!spv.struct<(!spv.array<256 x f16, stride=4> [0])>, CrossWorkgroup>) "None" attributes {
       spv.entry_point_abi = {local_size = dense<[32, 1, 1]> : vector<3xi32>},
       workgroup_attributions = 0 : i64

@@ -38,19 +38,119 @@ ParseResult parseKeywordIntoEnumAttr(OpAsmParser &parser,
   return success();
 }
 
-/// Implements `map` and `operands` composition and simplification to support
-/// `makeComposedAffineApply`. This can be called to achieve the same effects
-/// on `map` and `operands` without creating an AffineApplyOp that needs to be
-/// immediately deleted.
+/// Replace all occurrences of AffineExpr at position `pos` in `map` by the
+/// defining AffineApplyOp expression and operands.
+/// When `dimOrSymbolPosition < dims.size()`, AffineDimExpr@[pos] is replaced.
+/// When `dimOrSymbolPosition >= dims.size()`,
+/// AffineSymbolExpr@[pos - dims.size()] is replaced.
+/// Mutate `map`,`dims` and `syms` in place as follows:
+///   1. `dims` and `syms` are only appended to.
+///   2. `map` dim and symbols are gradually shifted to higer positions.
+///   3. Old `dim` and `sym` entries are replaced by nullptr
+/// This avoids the need for any bookkeeping.
+static LogicalResult replaceDimOrSym(AffineMap *map,
+                                     unsigned dimOrSymbolPosition,
+                                     SmallVectorImpl<Value> &dims,
+                                     SmallVectorImpl<Value> &syms) {
+  bool isDimReplacement = (dimOrSymbolPosition < dims.size());
+  unsigned pos = isDimReplacement ? dimOrSymbolPosition
+                                  : dimOrSymbolPosition - dims.size();
+  Value &v = isDimReplacement ? dims[pos] : syms[pos];
+  if (!v)
+    return failure();
+
+  auto affineApply = v.getDefiningOp<AffineApplyOp>();
+  if (!affineApply)
+    return failure();
+
+  // At this point we will perform a replacement of `v`, set the entry in `dim`
+  // or `sym` to nullptr immediately.
+  v = nullptr;
+
+  // Compute the map, dims and symbols coming from the AffineApplyOp.
+  AffineMap composeMap = affineApply.getAffineMap();
+  assert(composeMap.getNumResults() == 1 && "affine.apply with >1 results");
+  AffineExpr composeExpr =
+      composeMap.shiftDims(dims.size()).shiftSymbols(syms.size()).getResult(0);
+  ValueRange composeDims =
+      affineApply.getMapOperands().take_front(composeMap.getNumDims());
+  ValueRange composeSyms =
+      affineApply.getMapOperands().take_back(composeMap.getNumSymbols());
+
+  // Perform the replacement and append the dims and symbols where relevant.
+  MLIRContext *ctx = map->getContext();
+  AffineExpr toReplace = isDimReplacement ? getAffineDimExpr(pos, ctx)
+                                          : getAffineSymbolExpr(pos, ctx);
+  *map = map->replace(toReplace, composeExpr, dims.size(), syms.size());
+  dims.append(composeDims.begin(), composeDims.end());
+  syms.append(composeSyms.begin(), composeSyms.end());
+
+  return success();
+}
+
+/// Iterate over `operands` and fold away all those produced by an AffineApplyOp
+/// iteratively. Perform canonicalization of map and operands as well as
+/// AffineMap simplification. `map` and `operands` are mutated in place.
 static void composeAffineMapAndOperands(AffineMap *map,
                                         SmallVectorImpl<Value> *operands) {
-  AffineApplyNormalizer normalizer(*map, *operands);
-  auto normalizedMap = normalizer.getAffineMap();
-  auto normalizedOperands = normalizer.getOperands();
-  canonicalizeMapAndOperands(&normalizedMap, &normalizedOperands);
-  *map = normalizedMap;
-  *operands = normalizedOperands;
-  assert(*map);
+  if (map->getNumResults() == 0) {
+    canonicalizeMapAndOperands(map, operands);
+    *map = simplifyAffineMap(*map);
+    return;
+  }
+
+  MLIRContext *ctx = map->getContext();
+  SmallVector<Value, 4> dims(operands->begin(),
+                             operands->begin() + map->getNumDims());
+  SmallVector<Value, 4> syms(operands->begin() + map->getNumDims(),
+                             operands->end());
+
+  // Iterate over dims and symbols coming from AffineApplyOp and replace until
+  // exhaustion. This iteratively mutates `map`, `dims` and `syms`. Both `dims`
+  // and `syms` can only increase by construction.
+  // The implementation uses a `while` loop to support the case of symbols
+  // that may be constructed from dims ;this may be overkill.
+  while (true) {
+    bool changed = false;
+    for (unsigned pos = 0; pos != dims.size() + syms.size(); ++pos)
+      if ((changed |= succeeded(replaceDimOrSym(map, pos, dims, syms))))
+        break;
+    if (!changed)
+      break;
+  }
+
+  // Clear operands so we can fill them anew.
+  operands->clear();
+
+  // At this point we may have introduced null operands, prune them out before
+  // canonicalizing map and operands.
+  unsigned nDims = 0, nSyms = 0;
+  SmallVector<AffineExpr, 4> dimReplacements, symReplacements;
+  dimReplacements.reserve(dims.size());
+  symReplacements.reserve(syms.size());
+  for (auto *container : {&dims, &syms}) {
+    bool isDim = (container == &dims);
+    auto &repls = isDim ? dimReplacements : symReplacements;
+    for (auto en : llvm::enumerate(*container)) {
+      Value v = en.value();
+      if (!v) {
+        assert(isDim ? !map->isFunctionOfDim(en.index())
+                     : !map->isFunctionOfSymbol(en.index()) &&
+                           "map is function of unexpected expr@pos");
+        repls.push_back(getAffineConstantExpr(0, ctx));
+        continue;
+      }
+      repls.push_back(isDim ? getAffineDimExpr(nDims++, ctx)
+                            : getAffineSymbolExpr(nSyms++, ctx));
+      operands->push_back(v);
+    }
+  }
+  *map = map->replaceDimsAndSymbols(dimReplacements, symReplacements, nDims,
+                                    nSyms);
+
+  // Canonicalize and simplify before returning.
+  canonicalizeMapAndOperands(map, operands);
+  *map = simplifyAffineMap(*map);
 }
 
 /// Simplify operations by composing maps that supply results into them.
@@ -132,16 +232,16 @@ static LogicalResult foldMemRefCast(Operation *op) {
   return success(folded);
 }
 
-/// Fold reduce operations with no uses. Reduce has side effects on the heap,
-/// but can still be deleted if it has zero uses.
-template <typename ReduceOp>
-struct SimplifyDeadReduce : public OpRewritePattern<ReduceOp> {
-  using OpRewritePattern<ReduceOp>::OpRewritePattern;
+/// Fold reduce/store operations with no uses. Reduce/store have side effects
+/// on the heap, but can still be deleted if it has zero uses.
+template <typename WriteOp>
+struct SimplifyDeadWrite : public OpRewritePattern<WriteOp> {
+  using OpRewritePattern<WriteOp>::OpRewritePattern;
 
-  LogicalResult matchAndRewrite(ReduceOp reduce,
+  LogicalResult matchAndRewrite(WriteOp write,
                                 PatternRewriter &rewriter) const override {
-    if (reduce.use_empty()) {
-      rewriter.eraseOp(reduce);
+    if (write.use_empty()) {
+      rewriter.eraseOp(write);
       return success();
     }
     return failure();
@@ -259,7 +359,7 @@ OpFoldResult PxaLoadOp::fold(ArrayRef<Attribute> cstOperands) {
   /// load(memrefcast) -> load
   if (succeeded(foldMemRefCast(*this)))
     return getResult();
-  return OpFoldResult();
+  return {};
 }
 
 // ---- PxaVectorLoadOp ----
@@ -315,8 +415,9 @@ void PxaVectorLoadOp::getCanonicalizationPatterns(
 
 OpFoldResult PxaVectorLoadOp::fold(ArrayRef<Attribute> cstOperands) {
   /// reduce(memrefcast) -> reduce
-  foldMemRefCast(*this);
-  return OpFoldResult();
+  if (succeeded(foldMemRefCast(*this)))
+    return getResult();
+  return {};
 }
 
 // ---- PxaReduceOp ----
@@ -363,13 +464,14 @@ void PxaReduceOp::getCanonicalizationPatterns(OwningRewritePatternList &results,
                                               MLIRContext *context) {
   results.insert<                    //
       SimplifyAffineOp<PxaReduceOp>, //
-      SimplifyDeadReduce<PxaReduceOp>>(context);
+      SimplifyDeadWrite<PxaReduceOp>>(context);
 }
 
 OpFoldResult PxaReduceOp::fold(ArrayRef<Attribute> cstOperands) {
   /// reduce(memrefcast) -> reduce
-  foldMemRefCast(*this);
-  return OpFoldResult();
+  if (succeeded(foldMemRefCast(*this)))
+    return getResult();
+  return {};
 }
 
 //
@@ -444,7 +546,7 @@ ParseResult parsePxaGemmOp(OpAsmParser &parser, OperationState &result) {
   auto i64Type = builder.getIntegerType(64);
   GemmOperandParser a("a"), b("b"), c("c");
   ArrayAttr tileAttr;
-  IntegerAttr numBatchesAttr;
+  ArrayAttr numBatchesAttr;
   FunctionType funcType;
   return failure(
       c.parse(parser, result) || parser.parseEqual() ||
@@ -515,13 +617,28 @@ ParseResult parsePxaVectorReduceOp(OpAsmParser &parser,
 void PxaVectorReduceOp::getCanonicalizationPatterns(
     OwningRewritePatternList &results, MLIRContext *context) {
   results.insert<SimplifyAffineOp<PxaVectorReduceOp>,
-                 SimplifyDeadReduce<PxaVectorReduceOp>>(context);
+                 SimplifyDeadWrite<PxaVectorReduceOp>>(context);
 }
 
 OpFoldResult PxaVectorReduceOp::fold(ArrayRef<Attribute> cstOperands) {
   /// vectorReduce(memrefcast) -> vectorReduce
-  foldMemRefCast(*this);
-  return OpFoldResult();
+  if (succeeded(foldMemRefCast(*this)))
+    return getResult();
+  return {};
+}
+
+// ---- PxaStoreOp ----
+
+void PxaStoreOp::getCanonicalizationPatterns(OwningRewritePatternList &results,
+                                             MLIRContext *context) {
+  results.insert<SimplifyDeadWrite<PxaStoreOp>>(context);
+}
+
+OpFoldResult PxaStoreOp::fold(ArrayRef<Attribute> cstOperands) {
+  /// store(memrefcast) -> store
+  if (succeeded(foldMemRefCast(*this)))
+    return getResult();
+  return {};
 }
 
 void PXADialect::initialize() {

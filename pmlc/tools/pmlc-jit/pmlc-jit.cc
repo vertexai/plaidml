@@ -14,6 +14,8 @@
 #include <memory>
 #include <stdexcept>
 
+#include "mlir/Dialect/LLVMIR/LLVMDialect.h"
+#include "mlir/Dialect/OpenMP/OpenMPDialect.h"
 #include "mlir/ExecutionEngine/OptUtils.h"
 #include "mlir/Support/FileUtilities.h"
 #include "llvm/Support/CommandLine.h"
@@ -68,9 +70,10 @@ int JitRunnerMain(int argc, char **argv) {
     return EXIT_FAILURE;
   }
 
-  auto context = std::make_unique<MLIRContext>();
-  registerAllDialects(context->getDialectRegistry());
+  DialectRegistry registry;
+  registry.insert<LLVM::LLVMDialect, omp::OpenMPDialect>();
 
+  auto context = std::make_unique<MLIRContext>(registry);
   auto program = std::make_shared<Program>(std::move(context), std::move(file));
   program->entry = options.mainFuncName.getValue();
   auto executable =

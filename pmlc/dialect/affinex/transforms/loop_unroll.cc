@@ -44,7 +44,8 @@ struct AffinexLoopUnroll : public AffinexLoopUnrollBase<AffinexLoopUnroll> {
     });
 
     for (auto forOp : loopsToUnroll) {
-      loopUnrollFull(forOp);
+      // TODO: check LogicalResult
+      (void)loopUnrollFull(forOp);
     }
   }
 };

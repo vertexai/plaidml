@@ -57,6 +57,7 @@ plaidml_cc_library(
         "@llvm-project//mlir:AffineToStandardTransforms",
         "@llvm-project//mlir:AffineTransforms",
         "@llvm-project//mlir:LLVMTransforms",
+        "@llvm-project//mlir:MathTransforms",
         "@llvm-project//mlir:OpenMPToLLVM",
         "@llvm-project//mlir:SCFToStandard",
         "@llvm-project//mlir:StandardOpsTransforms",

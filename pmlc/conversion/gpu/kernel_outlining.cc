@@ -72,7 +72,7 @@ static void injectGpuIndexOperations(Location loc, Region &launchFuncOpBody,
 // Outline the `gpu.launch` operation body into a kernel function. Replace
 // `gpu.terminator` operations by `gpu.return` in the generated function.
 static gpu::GPUFuncOp outlineKernelFuncImpl(gpu::LaunchOp launchOp,
-                                            unsigned memorySpace,
+                                            Attribute memorySpace,
                                             StringRef kernelFnName,
                                             llvm::SetVector<Value> &operands) {
   Location loc = launchOp.getLoc();
@@ -143,7 +143,8 @@ static gpu::GPUFuncOp outlineKernelFuncImpl(gpu::LaunchOp launchOp,
 class OutlineToComp {
 public:
   // Begin rewrite of the funciton op for comp support, initalize state
-  OutlineToComp(FuncOp func, comp::ExecEnvRuntime runtime, unsigned memorySpace)
+  OutlineToComp(FuncOp func, comp::ExecEnvRuntime runtime,
+                Attribute memorySpace)
       : func(func), memorySpace(memorySpace) {
     // Precompute the various types
     execEnvType = comp::ExecEnvType::get(func.getContext(), runtime, /*tag=*/0,
@@ -322,7 +323,7 @@ private:
   // The host side function being rewritten into comp
   FuncOp func;
   // THe memory space for GPU buffers
-  unsigned memorySpace;
+  Attribute memorySpace;
   // The type of the execution environement
   comp::ExecEnvType execEnvType;
   // The type of events
@@ -393,7 +394,9 @@ public:
       // Prep for comp conversion
       auto runtime =
           static_cast<comp::ExecEnvRuntime>(execEnvRuntime.getValue());
-      unsigned memorySpace = execEnvMemorySpace.getValue();
+      auto i64Type = IntegerType::get(&getContext(), 64);
+      auto memorySpace =
+          IntegerAttr::get(i64Type, this->execEnvMemorySpace.getValue());
       OutlineToComp toComp(func, runtime, memorySpace);
 
       auto funcWalkResult = func.walk([&](gpu::LaunchOp op) {

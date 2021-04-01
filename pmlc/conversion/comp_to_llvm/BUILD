@@ -1,9 +1,9 @@
 # Copyright 2020 Intel Corporation
 
-package(default_visibility = ["//visibility:public"])
-
 load("//bzl:plaidml.bzl", "plaidml_cc_library")
 load("//vendor/mlir:tblgen.bzl", "gentbl")
+
+package(default_visibility = ["//visibility:public"])
 
 gentbl(
     name = "gen-pass",
@@ -26,8 +26,8 @@ plaidml_cc_library(
         "common.cc",
         "comp_to_llvm.cc",
         "pass_detail.h",
-        "utils.h",
         "utils.cc",
+        "utils.h",
     ],
     hdrs = [
         "passes.h",
@@ -36,14 +36,15 @@ plaidml_cc_library(
         ":gen-pass",
         "//pmlc/conversion/stdx_to_llvm",
         "//pmlc/dialect/comp/ir",
+        "@llvm-project//mlir:IR",
         "@llvm-project//mlir:LLVMDialect",
+        "@llvm-project//mlir:MathTransforms",
+        "@llvm-project//mlir:Pass",
         "@llvm-project//mlir:SPIRVDialect",
         "@llvm-project//mlir:SPIRVSerialization",
         "@llvm-project//mlir:StandardOps",
-        "@llvm-project//mlir:IR",
-        "@llvm-project//mlir:Pass",
-        "@llvm-project//mlir:Transforms",
         "@llvm-project//mlir:StandardOpsTransforms",
         "@llvm-project//mlir:Support",
+        "@llvm-project//mlir:Transforms",
     ],
 )

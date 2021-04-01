@@ -201,7 +201,9 @@ gatherAffineMapConstraints(mlir::AffineValueMap map) {
     auto arg = operandVal.dyn_cast<mlir::BlockArgument>();
     mlir::Operation *parent = arg.getOwner()->getParentOp();
     if (auto parallelOp = mlir::dyn_cast<mlir::AffineParallelOp>(parent)) {
-      addAffineParallelIVDomain(parallelOp, arg.getArgNumber(), constraints);
+      // TODO: check LogicalResult
+      (void)addAffineParallelIVDomain(parallelOp, arg.getArgNumber(),
+                                      constraints);
     }
   }
   return constraints;

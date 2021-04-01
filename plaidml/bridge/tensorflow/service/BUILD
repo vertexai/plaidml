@@ -6,7 +6,10 @@ cc_library(
     name = "compiler",
     srcs = ["compiler.cc"],
     hdrs = ["compiler.h"],
-    tags = ["skip_windows"],
+    tags = [
+        "skip_macos",
+        "skip_windows",
+    ],
     deps = [
         "//plaidml",
         "@org_tensorflow//tensorflow/compiler/xla/service:compiler",

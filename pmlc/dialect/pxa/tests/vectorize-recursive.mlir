@@ -32,7 +32,7 @@ func @grn(%arg0: index, %arg1: memref<1x4x128x24xf16>, %arg2: memref<1x4x128x24x
     %10 = fpext %cst_2 : f16 to f32
     %11 = divf %9, %10 : f32
     %12 = fptrunc %11 : f32 to f16
-    %13 = sqrt %12 : f16
+    %13 = math.sqrt %12 : f16
     %14 = affine.parallel (%arg5) = (0) to (24) reduce ("assign") -> (memref<1x4x128x24xf16>) {
       // CHECK: pxa.vector_load
       // CHECK-NEXT: vector.broadcast

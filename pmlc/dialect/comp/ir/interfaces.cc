@@ -38,14 +38,9 @@ mlir::LogicalResult pmlc::dialect::comp::verifyScheduleOp(mlir::Operation *op) {
 static LogicalResult verifyMemorySpace(OpState &op, ExecEnvType execEnvType,
                                        Type memoryType) {
   auto memRefType = memoryType.cast<MemRefType>();
-  unsigned requestedSpace = memRefType.getMemorySpace();
+  Attribute requestedSpace = memRefType.getMemorySpace();
 
-  bool memSpaceSupported = false;
-  for (unsigned execEnvSpace : execEnvType.getMemorySpaces()) {
-    memSpaceSupported |= execEnvSpace == requestedSpace;
-  }
-
-  if (!memSpaceSupported)
+  if (!execEnvType.supportsMemorySpace(requestedSpace))
     return op.emitOpError("memory space is not supported by execenv");
 
   return success();

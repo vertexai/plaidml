@@ -29,10 +29,11 @@ pml_cc_library(
     MLIRAffineToStandard
     MLIRAffineTransforms
     MLIRLLVMIRTransforms
+    MLIRMathTransforms
+    MLIROpenMPToLLVM
     MLIRSCFToStandard
     MLIRStandardOpsTransforms
     MLIRStandardToLLVM
-    MLIROpenMPToLLVM
     omp
 )
 

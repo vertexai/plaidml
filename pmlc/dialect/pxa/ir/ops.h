@@ -14,7 +14,7 @@
 #include "pmlc/dialect/pxa/ir/interfaces.h"
 #include "pmlc/util/enums.h"
 
-using mlir::MemRefDereferencingInterface;
+using mlir::AffineMapAccessInterface;
 
 #define GET_OP_CLASSES
 #include "pmlc/dialect/pxa/ir/ops.h.inc"

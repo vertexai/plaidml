@@ -47,6 +47,7 @@ plaidml_cc_library(
         "@llvm-project//mlir:GPUToVulkanTransforms",
         "@llvm-project//mlir:GPUTransforms",
         "@llvm-project//mlir:LLVMTransforms",
+        "@llvm-project//mlir:MathTransforms",
         "@llvm-project//mlir:SCFToGPUPass",
         "@llvm-project//mlir:SPIRVTransforms",
         "@llvm-project//mlir:StandardOpsTransforms",

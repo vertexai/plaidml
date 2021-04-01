@@ -78,7 +78,8 @@ public:
         proc = static_cast<Processor>(static_cast<int>(proc) + 1);
       }
     }
-    setMappingAttr(parallelOp, mappings);
+    if (failed(setMappingAttr(parallelOp, mappings)))
+      return failure();
     copyTags(parallelOp, op);
 
     rewriter.eraseBlock(parallelOp.getBody());

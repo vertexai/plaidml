@@ -88,6 +88,26 @@ private:
     return llvm::None;
   }
 
+  // Requirements for additional reduction indices
+  // that do not appear in output tensor
+  IdxStrideReqs additionalReductionIdxReqs = IdxStrideReqs{
+      [](int64_t stride) { return stride == 0; }, // output
+      [](int64_t stride) { return stride != 0; }, // input0
+      [](int64_t stride) { return stride != 0; }, // input1
+  };
+
+  bool isAdditionalReductionIndex(const BlockArgument &index,
+                                  ArrayRef<Value> tensor) {
+    for (size_t i = 0; i < tensor.size(); i++) {
+      auto strideInfo = getStrideInfo(tensor[i]);
+      auto stride = strideInfo->strides[index];
+      if (!additionalReductionIdxReqs[i](stride)) {
+        return false;
+      }
+    }
+    return true;
+  }
+
   double getCost(TensorAndIndexPermutation perm, ArrayRef<int64_t> tileSize) {
     unsigned tot_inner_loop = tileSize[0] * tileSize[1] * tileSize[2];
 
@@ -222,13 +242,26 @@ private:
     int64_t numBatches = 1;
     int64_t kRange = getIdxRange(perm.indexes[2]);
     IVLOG(3, "kRange: " << kRange);
+    SmallVector<BlockArgument, 4> Aindices, Bindices;
+    SmallVector<int64_t> numBatchesArr;
+    Aindices.emplace_back(perm.indexes[0]);
+    Aindices.emplace_back(perm.indexes[2]);
+    Bindices.emplace_back(perm.indexes[2]);
+    Bindices.emplace_back(perm.indexes[1]);
+
+    // Generate the GEMM op; select inputs based on permutation order
+    auto opC = cast<PxaReduceOp>(perm.values[0].getDefiningOp());
+    auto opA = cast<PxaLoadOp>(perm.values[1].getDefiningOp());
+    auto opB = cast<PxaLoadOp>(perm.values[2].getDefiningOp());
 
     // First, modify step size of all tiled indexes
     auto steps = op.getSteps();
     for (size_t i = 0; i < getBlockArgsAsSet().size(); i++) {
+      bool foundBlockArg = false;
       for (size_t j = 0; j < getTiledIdxCount(); j++) {
         if (perm.indexes[j] == op.getBody()->getArgument(i)) {
           steps[i] *= tileSize[j];
+          foundBlockArg = true;
 
           // K index (reduction dimension)
           if (doBatch && j == 2) {
@@ -260,23 +293,40 @@ private:
           }
         }
       }
+
+      // Check for additional reduction indices with a range greater than 1
+      if (doBatch && !foundBlockArg && steps[i] == 1 &&
+          getIdxRange(op.getBody()->getArgument(i)) > 1 &&
+          isAdditionalReductionIndex(op.getBody()->getArgument(i),
+                                     ArrayRef<Value>{opC, opA, opB})) {
+        auto index = op.getBody()->getArgument(i);
+        int64_t indexRange = getIdxRange(index);
+
+        Aindices.emplace_back(index);
+        Bindices.emplace_back(index);
+
+        numBatchesArr.emplace_back(indexRange);
+        foundBlockArg = true;
+        steps[i] = indexRange;
+      }
     }
     op.setSteps(steps);
 
-    // Generate the GEMM op; select inputs based on permutation order
-    auto opC = cast<PxaReduceOp>(perm.values[0].getDefiningOp());
-    auto opA = cast<PxaLoadOp>(perm.values[1].getDefiningOp());
-    auto opB = cast<PxaLoadOp>(perm.values[2].getDefiningOp());
+    // The numbatches array's first element corresponds to the 'k'
+    // index of GEMM. The other reduction indices follow 'k'.
+
+    numBatchesArr.insert(numBatchesArr.begin(), numBatches);
 
     auto bodyBuilder = op.getBodyBuilder();
 
     auto tileAttr = bodyBuilder.getI64ArrayAttr(tileSize);
-    auto numBatchesAttr = bodyBuilder.getI64IntegerAttr(numBatches);
+    auto numBatchesAttr =
+        bodyBuilder.getI64ArrayAttr(ArrayRef<int64_t>(numBatchesArr));
 
     SmallVector<Value, 8> mapOperands;
     GemmOperand c(opC, {perm.indexes[0], perm.indexes[1]}, mapOperands);
-    GemmOperand a(opA, {perm.indexes[0], perm.indexes[2]}, mapOperands);
-    GemmOperand b(opB, {perm.indexes[2], perm.indexes[1]}, mapOperands);
+    GemmOperand a(opA, ArrayRef<BlockArgument>(Aindices), mapOperands);
+    GemmOperand b(opB, ArrayRef<BlockArgument>(Bindices), mapOperands);
 
     auto brgemm = bodyBuilder.create<pxa::PxaGemmOp>(
         op.getLoc(), c.memref.getType(), //

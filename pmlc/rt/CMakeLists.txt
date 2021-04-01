@@ -43,7 +43,8 @@ pml_cc_library(
     LLVMX86AsmParser
     LLVMX86CodeGen
     MLIRExecutionEngine
-    MLIRTargetLLVMIR
+    MLIROpenMPToLLVMIRTranslation
+    MLIRTargetLLVMIRExport
     MLIRTransforms
     mlir_runner_utils
 )

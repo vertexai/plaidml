@@ -1,6 +1,6 @@
 # Copyright 2020 Intel Corporation
 
-load("//vendor/mlir:tblgen.bzl", "COPTS", "gentbl")
+load("//vendor/mlir:tblgen.bzl", "gentbl")
 load("//bzl:plaidml.bzl", "plaidml_cc_library")
 
 package(default_visibility = ["//visibility:public"])
@@ -24,7 +24,6 @@ gentbl(
     td_srcs = ["@llvm-project//mlir:OpBaseTdFiles"],
 )
 
-
 gentbl(
     name = "loop_with_epilog-gen",
     tbl_outs = [
@@ -36,12 +35,10 @@ gentbl(
     td_srcs = ["@llvm-project//mlir:OpBaseTdFiles"],
 )
 
-
 plaidml_cc_library(
     name = "util",
     srcs = glob(["*.cc"]),
     hdrs = glob(["*.h"]),
-    copts = COPTS,
     deps = [
         ":enums-gen",
         ":loop_with_epilog-gen",

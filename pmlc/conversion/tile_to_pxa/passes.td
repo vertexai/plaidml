@@ -11,6 +11,7 @@ def LowerTileToPXA : Pass<"convert-tile-to-pxa", "mlir::ModuleOp"> {
     "dialect::layer::LayerDialect",
     "dialect::stdx::StdXDialect",
     "mlir::AffineDialect",
+    "mlir::math::MathDialect",
     "mlir::scf::SCFDialect",
   ];
 }

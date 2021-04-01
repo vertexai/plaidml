@@ -3,7 +3,7 @@
 
 #include <tuple>
 
-#include "mlir/IR/Location.h"
+#include "mlir/IR/Attributes.h"
 #include "mlir/IR/Types.h"
 #include "llvm/ADT/Hashing.h"
 
@@ -57,6 +57,7 @@ public:
   using mlir::Type::Type;
 
   static bool classof(mlir::Type type);
+
   /// Returns runtime of this type.
   ExecEnvRuntime getRuntime() const {
     return static_cast<const ImplType *>(impl)->runtime;
@@ -72,6 +73,7 @@ class DeviceType : public mlir::Type::TypeBase<DeviceType, mlir::Type,
                                                mlir::DefaultTypeStorage> {
 public:
   using Base::Base;
+  using Base::getChecked;
 };
 
 // ============================================================================
@@ -83,27 +85,28 @@ using ExecEnvTag = unsigned;
 
 struct ExecEnvStorage : public RuntimeTypeStorage {
   ExecEnvStorage(ExecEnvRuntime runtime, ExecEnvTag tag,
-                 mlir::ArrayRef<unsigned> memorySpaces)
+                 mlir::ArrayRef<mlir::Attribute> memorySpaces)
       : RuntimeTypeStorage(runtime), tag(tag),
         memorySpaces(memorySpaces.begin(), memorySpaces.end()) {}
 
-  using KeyTy =
-      std::tuple<ExecEnvRuntime, ExecEnvTag, mlir::SmallVector<unsigned, 1>>;
+  using KeyTy = std::tuple<ExecEnvRuntime, ExecEnvTag,
+                           mlir::SmallVector<mlir::Attribute, 1>>;
 
   bool operator==(const KeyTy &key) const {
     return key == KeyTy(getRuntime(), tag, memorySpaces);
   }
 
   static llvm::hash_code hashKey(const KeyTy &key) {
-    return llvm::hash_combine(std::get<0>(key), std::get<1>(key),
-                              mlir::ArrayRef<unsigned>(std::get<2>(key)));
+    return llvm::hash_combine(
+        std::get<0>(key), std::get<1>(key),
+        mlir::ArrayRef<mlir::Attribute>(std::get<2>(key)));
   }
 
   static KeyTy getKey(ExecEnvRuntime runtime, ExecEnvTag tag,
-                      mlir::ArrayRef<unsigned> memorySpaces) {
+                      mlir::ArrayRef<mlir::Attribute> memorySpaces) {
     return KeyTy(runtime, tag,
-                 mlir::SmallVector<unsigned, 1>(memorySpaces.begin(),
-                                                memorySpaces.end()));
+                 mlir::SmallVector<mlir::Attribute, 1>(memorySpaces.begin(),
+                                                       memorySpaces.end()));
   }
 
   static ExecEnvStorage *construct(mlir::TypeStorageAllocator &allocator,
@@ -113,7 +116,7 @@ struct ExecEnvStorage : public RuntimeTypeStorage {
   }
 
   ExecEnvTag tag;
-  mlir::SmallVector<unsigned, 1> memorySpaces;
+  mlir::SmallVector<mlir::Attribute, 1> memorySpaces;
 };
 
 /// Execution environment represents target API's interface for managing memory
@@ -134,27 +137,31 @@ public:
 
   static ExecEnvType get(mlir::MLIRContext *context, ExecEnvRuntime runtime,
                          ExecEnvTag tag,
-                         mlir::ArrayRef<unsigned> memorySpaces) {
+                         mlir::ArrayRef<mlir::Attribute> memorySpaces) {
     return Base::get(context, runtime, tag, memorySpaces);
   }
 
-  static ExecEnvType getChecked(ExecEnvRuntime runtime, ExecEnvTag tag,
-                                mlir::ArrayRef<unsigned> memorySpaces,
-                                mlir::Location location) {
-    return Base::getChecked(location, runtime, tag, memorySpaces);
+  static ExecEnvType
+  getChecked(mlir::function_ref<mlir::InFlightDiagnostic()> emitError,
+             mlir::MLIRContext *context, ExecEnvRuntime runtime, ExecEnvTag tag,
+             mlir::ArrayRef<mlir::Attribute> memorySpaces) {
+    return Base::getChecked(emitError, context, runtime, tag, memorySpaces);
   }
 
-  // ExecEnvRuntime getRuntime() const { return getImpl()->runtime; }
   /// Returns tag of this execution environment.
   ExecEnvTag getTag() const { return getImpl()->tag; }
+
   /// Returns reference to list of supported memory spaces.
-  mlir::ArrayRef<unsigned> getMemorySpaces() const {
+  mlir::ArrayRef<mlir::Attribute> getMemorySpaces() const {
     return getImpl()->memorySpaces;
   }
+
   /// Returns default memory space, first in the list of all memory spaces.
-  unsigned getDefaultMemorySpace() const { return getMemorySpaces()[0]; }
+  mlir::Attribute getDefaultMemorySpace() const { return getMemorySpaces()[0]; }
+
   /// Returns whether `requestedSpace` is supported memory space.
-  bool supportsMemorySpace(unsigned requestedSpace) const;
+  bool supportsMemorySpace(mlir::Attribute requestedSpace) const;
+
   /// Returns EventType with matching runtime.
   EventType getEventType() const;
 };
@@ -199,21 +206,27 @@ class EventType
     : public mlir::Type::TypeBase<EventType, RuntimeType, EventTypeStorage> {
 public:
   using Base::Base;
+  using Base::getChecked;
 
   static EventType get(mlir::MLIRContext *context, ExecEnvRuntime runtime) {
     return Base::get(context, runtime);
   }
 
-  static EventType getChecked(ExecEnvRuntime runtime, mlir::Location location) {
-    return Base::getChecked(location, runtime);
+  static EventType
+  getChecked(mlir::function_ref<mlir::InFlightDiagnostic()> emitError,
+             mlir::MLIRContext *context, ExecEnvRuntime runtime) {
+    return Base::getChecked(emitError, context, runtime);
   }
 
   static EventType get(mlir::MLIRContext *context, ExecEnvType envType) {
     return EventType::get(context, envType.getRuntime());
   }
 
-  static EventType getChecked(ExecEnvType envType, mlir::Location location) {
-    return EventType::getChecked(envType.getRuntime(), location);
+  static EventType
+  getChecked(mlir::function_ref<mlir::InFlightDiagnostic()> emitError,
+             ExecEnvType envType) {
+    return EventType::getChecked(emitError, envType.getContext(),
+                                 envType.getRuntime());
   }
 };
 

@@ -5,22 +5,23 @@
 
 #include "pmlc/dialect/abi/ir/dialect.h"
 
+using namespace mlir; // NOLINT
+
 namespace pmlc::dialect::abi {
 
-void LoopOp::build(::mlir::OpBuilder &odsBuilder,
-                   ::mlir::OperationState &odsState) {
+void LoopOp::build(OpBuilder &odsBuilder, OperationState &odsState) {
   odsState.addAttribute("networkFieldTypes", odsBuilder.getTypeArrayAttr({}));
   odsState.addRegion();
   odsState.addRegion();
   odsState.addRegion();
 }
 
-std::vector<mlir::Type> LoopOp::getNetworkFieldTypes() {
-  std::vector<mlir::Type> result;
+std::vector<Type> LoopOp::getNetworkFieldTypes() {
+  std::vector<Type> result;
   auto arrayAttr = networkFieldTypes();
   if (arrayAttr) {
     for (auto attr : arrayAttr) {
-      if (auto tyAttr = attr.dyn_cast<mlir::TypeAttr>()) {
+      if (auto tyAttr = attr.dyn_cast<TypeAttr>()) {
         result.emplace_back(tyAttr.getValue());
       }
     }
@@ -36,24 +37,24 @@ unsigned LoopOp::getNumNetworkFields() {
   return 0;
 }
 
-void LoopOp::setNetworkFieldTypes(mlir::TypeRange types) {
-  mlir::SmallVector<mlir::Attribute, 8> attrs;
+void LoopOp::setNetworkFieldTypes(TypeRange types) {
+  SmallVector<Attribute, 8> attrs;
   for (auto ty : types) {
-    attrs.emplace_back(mlir::TypeAttr::get(ty));
+    attrs.emplace_back(TypeAttr::get(ty));
   }
-  auto arrayAttr = mlir::ArrayAttr::get(attrs, getContext());
+  auto arrayAttr = ArrayAttr::get(getContext(), attrs);
   networkFieldTypesAttr(arrayAttr);
 }
 
-mlir::Block *LoopOp::getBodyEntryBlock() { return &bodyRegion().front(); }
-mlir::Block *LoopOp::getFiniEntryBlock() { return &finiRegion().front(); }
+Block *LoopOp::getBodyEntryBlock() { return &bodyRegion().front(); }
+Block *LoopOp::getFiniEntryBlock() { return &finiRegion().front(); }
 
 YieldOp LoopOp::getInitTerminator() {
-  return mlir::cast<YieldOp>(initRegion().back().getTerminator());
+  return cast<YieldOp>(initRegion().back().getTerminator());
 }
 
 TerminatorOp LoopOp::getFiniTerminator() {
-  return mlir::cast<TerminatorOp>(finiRegion().back().getTerminator());
+  return cast<TerminatorOp>(finiRegion().back().getTerminator());
 }
 
 } // namespace pmlc::dialect::abi

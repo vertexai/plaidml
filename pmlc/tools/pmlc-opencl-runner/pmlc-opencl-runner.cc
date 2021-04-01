@@ -95,13 +95,15 @@ int JitRunnerMain(int argc, char **argv) {
     return EXIT_FAILURE;
   }
 
-  auto context = std::make_unique<MLIRContext>();
-  registerAllDialects(context->getDialectRegistry());
+  mlir::DialectRegistry registry;
+  registerAllDialects(registry);
 
+  auto context = std::make_unique<MLIRContext>(registry);
   auto program = std::make_shared<Program>(std::move(context), std::move(file));
   program->entry = options.mainFuncName.getValue();
 
-  runMLIRPasses(*program->module);
+  if (failed(runMLIRPasses(*program->module)))
+    return EXIT_FAILURE;
 
   auto executable =
       Executable::fromProgram(program, options.optDeviceID.getValue());

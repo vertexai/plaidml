@@ -6,6 +6,7 @@
 /.vs
 /.vscode
 /bazel-*
+/build-*
 /docs/_build
 /docs/venv
 /tmp

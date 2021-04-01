@@ -107,15 +107,21 @@ struct FusionInfo {
                            bool needsTiling, int64_t vectorWidth) {
     if (tiledFusion && needsTiling) {
       inner.walk([&](AffineParallelOp par) {
-        vectorizeOverOutputs(par, vectorWidth);
+        // TODO: check LogicalResult
+        (void)vectorizeOverOutputs(par, vectorWidth);
       });
 
       // Try to 'vector cache' any remaining innermost loads
-      outer.walk(
-          [&](PxaLoadOp load) { cacheLoadAsVector(inner, load, vectorWidth); });
+      outer.walk([&](PxaLoadOp load) {
+        // TODO: check LogicalResult
+        (void)cacheLoadAsVector(inner, load, vectorWidth);
+      });
 
       // Convert local allocations to vector types
-      outer.walk([&](AllocOp alloc) { vectorizeBuffer(alloc); });
+      outer.walk([&](AllocOp alloc) {
+        // TODO: check LogicalResult
+        (void)vectorizeBuffer(alloc);
+      });
 
       // Affine normalizations
       outer.walk(normalizeAffineParallel);

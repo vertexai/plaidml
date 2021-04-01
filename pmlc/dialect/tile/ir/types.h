@@ -10,6 +10,7 @@ class APFloatType : public mlir::Type::TypeBase<APFloatType, mlir::Type,
                                                 mlir::DefaultTypeStorage> {
 public:
   using Base::Base;
+  using Base::getChecked;
 };
 
 class APSignedIntegerType
@@ -17,6 +18,7 @@ class APSignedIntegerType
                                   mlir::DefaultTypeStorage> {
 public:
   using Base::Base;
+  using Base::getChecked;
 };
 
 class APUnsignedIntegerType
@@ -24,6 +26,7 @@ class APUnsignedIntegerType
                                   mlir::DefaultTypeStorage> {
 public:
   using Base::Base;
+  using Base::getChecked;
 };
 
 } // namespace pmlc::dialect::tile

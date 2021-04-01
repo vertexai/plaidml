@@ -4,6 +4,7 @@
 #include <utility>
 
 #include "mlir/Dialect/Affine/IR/AffineOps.h"
+#include "mlir/Dialect/Math/IR/Math.h"
 #include "mlir/Dialect/SCF/SCF.h"
 #include "mlir/Dialect/StandardOps/IR/Ops.h"
 #include "mlir/IR/Matchers.h"
@@ -1935,7 +1936,7 @@ struct TraceOpConversion : public OpConversionPattern<tile::PragmaOp> {
     funcOp->setAttr("trace", builder.getUnitAttr());
     funcOp->setAttr("id", builder.getI64IntegerAttr(uniqueId));
     funcOp.setPrivate();
-    return SymbolRefAttr::get(symbol, context);
+    return SymbolRefAttr::get(context, symbol);
   }
 };
 
@@ -1947,15 +1948,15 @@ struct PackOpConversion : public OpConversionPattern<stdx::PackOp> {
                   ConversionPatternRewriter &rewriter) const final {
     auto argpackType = stdx::ArgpackType::get(op.getContext());
     // Some 0-dim tensors convert to 0-dim memrefs, and some convert to actual
-    // scalars.  To make the type mapping exact, we always convert 0-dim memrefs
+    // scalars. To make the type mapping exact, we always convert 0-dim memrefs
     // to scalars via doing a load before packing.
     SmallVector<Value, 8> scalarizedOperands;
     for (auto val : operands) {
-      // Handle cases requring load
+      // Handle cases that require a load.
       if (auto memrefType = val.getType().dyn_cast<MemRefType>()) {
         if (memrefType.getRank() == 0) {
           auto loadOp =
-              rewriter.create<pxa::PxaLoadOp>(op.getLoc(), val, ValueRange({}));
+              rewriter.create<pxa::PxaLoadOp>(op.getLoc(), val, ValueRange{});
           scalarizedOperands.push_back(loadOp.getResult());
           continue;
         }
@@ -2042,12 +2043,13 @@ struct LowerTileToPXAPass : public LowerTileToPXABase<LowerTileToPXAPass> {
     // Set up target (i.e. what is legal)
     ConversionTarget target(getContext());
     TypeConverter converter;
-    target.addLegalDialect<mlir::AffineDialect>();
-    target.addLegalDialect<mlir::StandardOpsDialect>();
-    target.addLegalDialect<mlir::scf::SCFDialect>();
-    target.addLegalDialect<dialect::layer::LayerDialect>();
-    target.addLegalDialect<dialect::pxa::PXADialect>();
-    target.addLegalDialect<dialect::stdx::StdXDialect>();
+    target.addLegalDialect<mlir::AffineDialect,          //
+                           mlir::math::MathDialect,      //
+                           mlir::scf::SCFDialect,        //
+                           mlir::StandardOpsDialect,     //
+                           dialect::layer::LayerDialect, //
+                           dialect::pxa::PXADialect,     //
+                           dialect::stdx::StdXDialect>();
     target.addLegalOp<scf::ForOp, scf::YieldOp, scf::IfOp>();
     target.addLegalOp<mlir::ModuleOp, mlir::ModuleTerminatorOp, ReturnOp>();
     target.addDynamicallyLegalOp<FuncOp>(
@@ -2111,14 +2113,14 @@ struct LowerTileToPXAPass : public LowerTileToPXABase<LowerTileToPXAPass> {
         ContractionOpConversion<CombinationKind::cond,
                                 CondOp<CmpIntOp<CmpIPredicate::eq>>,
                                 AnyComparandIs<EltwiseInteger>>,
-        EltwiseOpConversion<tile::ExpOp, StdOp<mlir::ExpOp>>,
-        EltwiseOpConversion<tile::LogOp, StdOp<mlir::LogOp>,
+        EltwiseOpConversion<tile::ExpOp, StdOp<math::ExpOp>>,
+        EltwiseOpConversion<tile::LogOp, StdOp<math::LogOp>,
                             ResultIs<EltwiseFloat>>,
         EltwiseOpConversion<tile::PowOp, StdOp<stdx::PowOp>,
                             ResultIs<EltwiseFloat>>,
         EltwiseOpConversion<tile::ErfOp, StdOp<stdx::ErfOp>,
                             OperandsAre<EltwiseFloat>>,
-        EltwiseOpConversion<tile::CosOp, StdOp<mlir::CosOp>,
+        EltwiseOpConversion<tile::CosOp, StdOp<math::CosOp>,
                             ResultIs<EltwiseFloat>>,
         EltwiseOpConversion<tile::TanOp, StdOp<stdx::TanOp>,
                             OperandsAre<EltwiseFloat>>,
@@ -2126,9 +2128,9 @@ struct LowerTileToPXAPass : public LowerTileToPXABase<LowerTileToPXAPass> {
                             OperandsAre<EltwiseFloat>>,
         EltwiseOpConversion<tile::CosHOp, StdOp<stdx::CosHOp>,
                             OperandsAre<EltwiseFloat>>,
-        EltwiseOpConversion<tile::SinOp, StdOp<mlir::SinOp>,
+        EltwiseOpConversion<tile::SinOp, StdOp<math::SinOp>,
                             ResultIs<EltwiseFloat>>,
-        EltwiseOpConversion<tile::TanHOp, StdOp<mlir::TanhOp>,
+        EltwiseOpConversion<tile::TanHOp, StdOp<math::TanhOp>,
                             ResultIs<EltwiseFloat>>,
         EltwiseOpConversion<tile::ACosOp, StdOp<stdx::ACosOp>,
                             OperandsAre<EltwiseFloat>>,
@@ -2169,7 +2171,7 @@ struct LowerTileToPXAPass : public LowerTileToPXABase<LowerTileToPXAPass> {
                             ResultIs<EltwiseSigned>>,
         EltwiseOpConversion<tile::DivOp, StdOp<mlir::UnsignedDivIOp>,
                             ResultIs<EltwiseUnsigned>>,
-        EltwiseOpConversion<tile::SqrtOp, StdOp<mlir::SqrtOp>>,
+        EltwiseOpConversion<tile::SqrtOp, StdOp<math::SqrtOp>>,
         EltwiseOpConversion<tile::ModOp, StdOp<mlir::RemFOp>,
                             ResultIs<EltwiseFloat>>,
         EltwiseOpConversion<tile::ModOp, StdOp<mlir::SignedRemIOp>,

@@ -20,7 +20,7 @@ void SubgroupBlockReadINTELOp::build(OpBuilder &builder, OperationState &result,
   auto memrefType = memref.getType().cast<MemRefType>();
   result.addOperands(memref);
   result.addOperands(indices);
-  result.types.push_back(memrefType.getElementType());
+  result.addTypes(memrefType.getElementType());
 }
 
 static LogicalResult

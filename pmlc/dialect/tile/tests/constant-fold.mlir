@@ -237,3 +237,12 @@ func @cast_si32_to_f32(%arg0: tensor<3xsi32>) -> tensor<3xf32> {
   // CHECK-NEXT: %[[cast:.*]] = tile.cast %{{.*}} : (tensor<3xsi32>) -> tensor<3xf32>
   // CHECK-NEXT: return %[[cast]] : tensor<3xf32>
 }
+
+// CHECK-LABEL: @mixed_binary
+func @mixed_binary() -> tensor<si64> {
+    %c1_six = tile.constant(1 : i64) : tensor<!tile.six>
+    %c1_uix = tile.constant(1 : i64) : tensor<!tile.uix>
+    %0 = tile.mul %c1_six, %c1_uix : (tensor<!tile.six>, tensor<!tile.uix>) -> tensor<si64>
+    // CHECK-NEXT: tile.constant(1 : i64) : tensor<si64>
+    return %0 : tensor<si64>
+}

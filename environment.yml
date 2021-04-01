@@ -3,6 +3,7 @@ channels:
 dependencies:
   - ccache=3.7.12
   - cmake=3.18.4
+  - cython=0.29.22
   - doxygen=1.8.20
   - matplotlib=3.3.2
   - ninja=1.10.1

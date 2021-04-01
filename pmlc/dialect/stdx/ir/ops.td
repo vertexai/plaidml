@@ -106,7 +106,8 @@ def TanOp : StdX_UnaryFuncOp<"tan"> {
   let summary = "tangent";
 }
 
-def AnyStdScalar : AnyTypeOf<[AnyFloat, AnySignlessInteger]> {} 
+def AnyStdScalar : AnyTypeOf<[AnyFloat, AnySignlessInteger]> {}
+def AnyVectorOrScalar : AnyTypeOf<[AnyStdScalar, AnyVector]> {}
 
 def SubgroupBroadcastOp : StdX_Op<"subgroup_broadcast", [NoSideEffect, AllTypesMatch<["value", "result"]>]> {
   let summary = "broadcast to all elements in subgroup";
@@ -118,31 +119,24 @@ def SubgroupBroadcastOp : StdX_Op<"subgroup_broadcast", [NoSideEffect, AllTypesM
   let verifier = ?;
 }
 
-def AnyVectorOrScalar : AnyTypeOf<[AnyStdScalar, AnyVector]> {}
-def SubgroupBlockReadOutputType : AnyTypeOf<[AnyStdScalar, AnyVector, AnyMemRef]> {}
-
 def SubgroupBlockReadINTELOp : StdX_Op<"subgroup_block_read_intel", [NoSideEffect]> {
   let summary = "See intel_subgroups extension.";
   let arguments = (ins Arg<AnyMemRef, "the reference to subgroup block read from",
                            [MemRead]>:$memref,
                            Variadic<Index>:$indices);
-  let results = (outs SubgroupBlockReadOutputType:$result);
+  let results = (outs AnyVectorOrScalar:$result);
 
   let builders = [
-    OpBuilderDAG<(ins
+    OpBuilder<(ins
       "mlir::Value":$memref,
       CArg<"mlir::ValueRange", "{}">:$indices
     )>
   ];
 
   let extraClassDeclaration = [{
-    mlir::Value getMemRef() { return getOperand(0); }
-    void setMemRef(mlir::Value value) { setOperand(0, value); }
     mlir::MemRefType getMemRefType() {
-      return getMemRef().getType().cast<mlir::MemRefType>();
+      return memref().getType().cast<mlir::MemRefType>();
     }
-
-    operand_range getIndices() { return {operand_begin() + 1, operand_end()}; }
   }];
 
   let assemblyFormat = "$memref `[` $indices `]` attr-dict `:` type($memref)`,` type($result)";
@@ -157,20 +151,12 @@ def SubgroupBlockWriteINTELOp : StdX_Op<"subgroup_block_write_intel", [NoSideEff
                        Variadic<Index>:$indices);
 
   let builders = [
-    OpBuilderDAG<(ins "mlir::Value":$valueToStore, "mlir::Value":$memref)>
+    OpBuilder<(ins "mlir::Value":$valueToStore, "mlir::Value":$memref)>
   ];
 
   let extraClassDeclaration = [{
-      mlir::Value getValueToStore() { return getOperand(0); }
-
-      mlir::Value getMemRef() { return getOperand(1); }
-      void setMemRef(mlir::Value value) { setOperand(1, value); }
       mlir::MemRefType getMemRefType() {
-        return getMemRef().getType().cast<mlir::MemRefType>();
-      }
-
-      operand_range getIndices() {
-        return {operand_begin() + 2, operand_end()};
+        return memref().getType().cast<mlir::MemRefType>();
       }
   }];
 

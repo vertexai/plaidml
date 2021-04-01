@@ -13,6 +13,7 @@ plaidml_cc_library(
         "//pmlc/dialect/layer",
         "//pmlc/dialect/tile",
         "//pmlc/util",
+        "@llvm-project//mlir:MathDialect",
         "@llvm-project//mlir:Support",
         "@llvm-project//mlir:Transforms",
     ],

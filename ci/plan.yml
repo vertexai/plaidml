@@ -77,13 +77,15 @@ VARIANTS:
     env:
       PLAIDML_DEVICE: llvm_cpu.0
       PLAIDML_TARGET: llvm_cpu
-  macos_x86_64_dbg:
-    bazel_config: dbg
-    arch: macosx_10_10_x86_64
-    system: Darwin
-    env:
-      PLAIDML_DEVICE: llvm_cpu.0
-      PLAIDML_TARGET: llvm_cpu
+  # Multiple "__const" sections causing assertion during JITLink
+  # see: https://reviews.llvm.org/rGadf2098bd8193e3f9395512143071328e7bd024d
+  # macos_x86_64_dbg:
+  #   bazel_config: dbg
+  #   arch: macosx_10_10_x86_64
+  #   system: Darwin
+  #   env:
+  #     PLAIDML_DEVICE: llvm_cpu.0
+  #     PLAIDML_TARGET: llvm_cpu
   # Temporarily remove until build agents are online again
   # windows_x86_64:
   #   arch: win_amd64
@@ -96,8 +98,6 @@ SUITES:
   smoke:
     platforms:
       pml-llvm-cpu:
-        pipelines: [nightly, plaidml]
-      pml-ocl-gen:
         pipelines: [nightly, plaidml]
     params:
       plaidml:
@@ -194,8 +194,6 @@ SUITES:
   infer:
     platforms:
       pml-llvm-cpu:
-        pipelines: [nightly, plaidml, ci]
-      pml-ocl-gen:
         pipelines: [nightly, plaidml, ci]
     params:
       ci:

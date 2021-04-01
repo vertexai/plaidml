@@ -37,7 +37,7 @@ def ContractionOp : TileOp<"contract", [
   let results = (outs RankedTensorOf<[AnyScalar]>:$result);
 
   let builders = [
-    OpBuilderDAG<(ins 
+    OpBuilder<(ins
       "mlir::Type":$resultType,
       "mlir::Value":$init,
       "mlir::ArrayRef<mlir::Value>":$tensors,
@@ -122,7 +122,7 @@ def GatherOp : MaterializeOp<"gather"> {
   }];
 
   let builders = [
-    OpBuilderDAG<(ins
+    OpBuilder<(ins
       "mlir::Type":$resultType,
       "mlir::ValueRange":$operands,
       "mlir::IntegerAttr":$axis,
@@ -173,7 +173,7 @@ def ScatterOp : MaterializeOp<"scatter"> {
   );
   let results = (outs RankedTensorOf<[AnyScalar]>:$result);
   let builders = [
-    OpBuilderDAG<(ins
+    OpBuilder<(ins
       "mlir::Type":$resultType,
       "mlir::ValueRange":$operands,
       "mlir::IntegerAttr":$axis,
@@ -203,7 +203,7 @@ def PragmaOp : MaterializeOp<"pragma", [
   let results = (outs AnyType:$result);
 
   let builders = [
-    OpBuilderDAG<(ins
+    OpBuilder<(ins
       "mlir::Value":$tensor,
       "mlir::StringRef":$op,
       "mlir::DictionaryAttr":$attrs), [{

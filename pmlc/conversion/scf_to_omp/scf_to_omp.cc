@@ -58,8 +58,8 @@ LogicalResult convertSCPParallel(scf::ParallelOp op) {
   auto numThreadsVal = builder.create<ConstantIndexOp>(loc, numThreads);
 
   auto clauseAttr =
-      StringAttr::get(stringifyClauseDefault(omp::ClauseDefault::defshared),
-                      builder.getContext());
+      StringAttr::get(builder.getContext(),
+                      stringifyClauseDefault(omp::ClauseDefault::defshared));
 
   // Create the omp parallel fork/join region
   auto parallelOp =

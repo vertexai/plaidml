@@ -89,7 +89,9 @@ public:
     OwningRewritePatternList patterns;
     auto *context = &getContext();
     patterns.insert<MemOpPattern<LoadOp>, MemOpPattern<StoreOp>>(context);
-    applyPatternsAndFoldGreedily(getOperation(), std::move(patterns));
+    if (failed(
+            applyPatternsAndFoldGreedily(getOperation(), std::move(patterns))))
+      signalPassFailure();
   }
 };
 

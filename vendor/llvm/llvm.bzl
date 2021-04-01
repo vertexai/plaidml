@@ -294,11 +294,6 @@ win32_cmake_vars = {
 
     # LLVM features
     "LTDL_SHLIB_EXT": ".dll",
-
-    # ThreadPoolExecutor global destructor and thread handshaking do not work
-    # on this platform when used as a DLL.
-    # See: https://bugs.llvm.org/show_bug.cgi?id=44211
-    "LLVM_ENABLE_THREADS": 0,
 }
 
 # Select a set of CMake variables based on the platform.
@@ -313,6 +308,24 @@ llvm_all_cmake_vars = select({
             darwin_cmake_vars,
         ),
     ),
+    # (PlaidML)
+    # "@bazel_tools//src/conditions:macos_arm64": cmake_var_string(
+    #     _dict_add(
+    #         cmake_vars,
+    #         llvm_target_cmake_vars("AArch64", "arm64-apple-darwin"),
+    #         posix_cmake_vars,
+    #         darwin_cmake_vars,
+    #     ),
+    # ),
+    # (PlaidML)
+    # "@bazel_tools//src/conditions:linux_aarch64": cmake_var_string(
+    #     _dict_add(
+    #         cmake_vars,
+    #         llvm_target_cmake_vars("AArch64", "aarch64-unknown-linux_gnu"),
+    #         posix_cmake_vars,
+    #         linux_cmake_vars,
+    #     ),
+    # ),
     # (PlaidML)
     # "@bazel_tools//src/conditions:linux_ppc64le": cmake_var_string(
     #     _dict_add(

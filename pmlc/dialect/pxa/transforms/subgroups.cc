@@ -299,19 +299,30 @@ void SubgroupApply(AffineParallelOp op, SubgroupPlan plan) {
   // Tile over accumulations
   auto accum = tileAccumulations(op, false);
   // Cache innermost loads at accum level
-  subgroup.walk([&](PxaLoadOp load) { cacheLoad(accum, load); });
+  subgroup.walk([&](PxaLoadOp load) {
+    // TODO: check LogicalResult
+    (void)cacheLoad(accum, load);
+  });
   // Cache innermost reduces at op level
-  subgroup.walk([&](PxaReduceOp reduce) { cacheReduce(op, reduce); });
+  subgroup.walk([&](PxaReduceOp reduce) {
+    // TODO: check LogicalResult
+    (void)cacheReduce(op, reduce);
+  });
   // Vectorize everything we can
   op.walk([&](AffineParallelOp par) {
-    vectorizeOverOutputs(par, plan.subgroupSize);
+    // TODO: check LogicalResult
+    (void)vectorizeOverOutputs(par, plan.subgroupSize);
   });
   // Try to 'vector cache' any remaining innermost loads
   subgroup.walk([&](PxaLoadOp load) {
-    cacheLoadAsVector(inner, load, plan.subgroupSize);
+    // TODO: check LogicalResult
+    (void)cacheLoadAsVector(inner, load, plan.subgroupSize);
   });
   // Convert local allocations to vector types
-  op.walk([&](AllocOp alloc) { vectorizeBuffer(alloc); });
+  op.walk([&](AllocOp alloc) {
+    // TODO: check LogicalResult
+    (void)vectorizeBuffer(alloc);
+  });
   // Attach subgroup size
   setIntegerTag(op, subgroupSizeTag(), plan.subgroupSize);
 }

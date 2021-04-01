@@ -31,7 +31,14 @@ plaidml::Program nodeProgramBuilder(const std::shared_ptr<ngraph::Node>& _node) 
   for (const auto& input : _node->inputs()) {
     std::vector<int64_t> dims{input.get_shape().begin(), input.get_shape().end()};
     auto type = to_plaidml(input.get_element_type());
-    auto tensor = plaidml::edsl::Placeholder(type, dims, input.get_tensor().get_name());
+    std::string tensor_name;
+    if (input.get_tensor().get_names().empty()) {
+      tensor_name = "";
+    } else {
+      // PlaidML only has one name per tensor, and it isn't semantic, just pick one arbitrarily
+      tensor_name = *input.get_tensor().get_names().begin();
+    }
+    auto tensor = plaidml::edsl::Placeholder(type, dims, tensor_name);
     edsl_inputs.push_back(tensor);
     ctx.operands.push_back(tensor);
   }

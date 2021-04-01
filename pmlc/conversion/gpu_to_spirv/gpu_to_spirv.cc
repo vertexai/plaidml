@@ -6,6 +6,7 @@
 #include "mlir/Conversion/StandardToSPIRV/StandardToSPIRV.h"
 #include "mlir/Conversion/VectorToSPIRV/VectorToSPIRV.h"
 #include "mlir/Dialect/GPU/GPUDialect.h"
+#include "mlir/Dialect/Math/IR/Math.h"
 #include "mlir/Dialect/SCF/SCF.h"
 #include "mlir/Dialect/SPIRV/IR/SPIRVDialect.h"
 #include "mlir/Dialect/SPIRV/IR/SPIRVOps.h"
@@ -251,17 +252,17 @@ template <typename GLSLOpTy, typename NegOpTy, typename LessThanOpTy>
 struct GLSLAbsOpPattern final : public OpConversionPattern<GLSLOpTy> {
   using OpConversionPattern<GLSLOpTy>::OpConversionPattern;
 
-  mlir::LogicalResult
-  matchAndRewrite(GLSLOpTy op, mlir::ArrayRef<mlir::Value> operands,
+  LogicalResult
+  matchAndRewrite(GLSLOpTy op, ArrayRef<Value> operands,
                   ConversionPatternRewriter &rewriter) const final {
-    mlir::Value arg = operands[0];
-    mlir::Type targetType = arg.getType();
-    mlir::Value cst0 = rewriter.create<spirv::ConstantOp>(
+    Value arg = operands[0];
+    Type targetType = arg.getType();
+    Value cst0 = rewriter.create<spirv::ConstantOp>(
         op.getLoc(), targetType, rewriter.getIntegerAttr(targetType, 0));
-    mlir::Value negArg = rewriter.create<NegOpTy>(op.getLoc(), arg);
-    mlir::Value isNeg = rewriter.create<LessThanOpTy>(op.getLoc(), arg, cst0);
+    Value negArg = rewriter.create<NegOpTy>(op.getLoc(), arg);
+    Value isNeg = rewriter.create<LessThanOpTy>(op.getLoc(), arg, cst0);
     rewriter.replaceOpWithNewOp<spirv::SelectOp>(op, isNeg, negArg, arg);
-    return mlir::success();
+    return success();
   }
 };
 
@@ -364,7 +365,7 @@ void populateCustomGLSLToStdSpirvPatterns(MLIRContext *context,
 void populateCustomStdToOCLSpirvPatterns(MLIRContext *context,
                                          SPIRVTypeConverter &typeConverter,
                                          OwningRewritePatternList &patterns) {
-  patterns.insert<UnaryOpConversion<mlir::ExpOp, spirv::OCLExpOp>>(
+  patterns.insert<UnaryOpConversion<math::ExpOp, spirv::OCLExpOp>>(
       typeConverter, context);
 }
 

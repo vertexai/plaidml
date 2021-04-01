@@ -62,7 +62,7 @@ private:
     const char *symbol = "plaidml_rt_prng";
     auto context = module.getContext();
     if (module.lookupSymbol(symbol)) {
-      return SymbolRefAttr::get(symbol, context);
+      return SymbolRefAttr::get(context, symbol);
     }
     OpBuilder::InsertionGuard guard(rewriter);
     rewriter.setInsertionPointToStart(module.getBody());
@@ -72,7 +72,7 @@ private:
                                              ArrayRef<Type>{});
     rewriter.create<FuncOp>(loc, symbol, funcType, ArrayRef<NamedAttribute>{})
         .setPrivate();
-    return SymbolRefAttr::get(symbol, context);
+    return SymbolRefAttr::get(context, symbol);
   }
 };
 

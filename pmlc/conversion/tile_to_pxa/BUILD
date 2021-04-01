@@ -36,5 +36,6 @@ plaidml_cc_library(
         "//pmlc/dialect/pxa/ir",
         "//pmlc/dialect/stdx/ir",
         "//pmlc/dialect/tile",
+        "@llvm-project//mlir:MathDialect",
     ],
 )

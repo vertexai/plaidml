@@ -16,8 +16,6 @@ def AggregationKind : I64EnumAttr<
       I64EnumAttrCase<"mul", 4>,
     ]> {
   let cppNamespace = "pmlc::util";
-  let returnType = "AggregationKind";
-  let convertFromStorage = "static_cast<" # returnType # ">($_self.getValue().getZExtValue())";
 }
 
 def CombinationKind : I64EnumAttr<
@@ -31,8 +29,6 @@ def CombinationKind : I64EnumAttr<
       I64EnumAttrCase<"mul", 4>,
     ]> {
   let cppNamespace = "pmlc::util";
-  let returnType = "CombinationKind";
-  let convertFromStorage = "static_cast<" # returnType # ">($_self.getValue().getZExtValue())";
 }
 
 def DataType : I64EnumAttr<
@@ -57,8 +53,6 @@ def DataType : I64EnumAttr<
       I64EnumAttrCase<"f64", 15>,
     ]> {
   let cppNamespace = "pmlc::util";
-  let returnType = "DataType";
-  let convertFromStorage = "static_cast<" # returnType # ">($_self.getValue().getZExtValue())";
 }
 
 def InterpolationMode : I64EnumAttr<
@@ -70,8 +64,6 @@ def InterpolationMode : I64EnumAttr<
      I64EnumAttrCase<"cubic", 2>,
     ]> {
   let cppNamespace = "pmlc::util";
-  let returnType = "InterpolationMode";
-  let convertFromStorage = "static_cast<" # returnType # ">($_self.getValue().getZExtValue())";
 }
 
 def NearestMode : I64EnumAttr<
@@ -85,8 +77,6 @@ def NearestMode : I64EnumAttr<
      I64EnumAttrCase<"simple", 4>,
     ]> {
   let cppNamespace = "pmlc::util";
-  let returnType = "NearestMode";
-  let convertFromStorage = "static_cast<" # returnType # ">($_self.getValue().getZExtValue())";
 }
 
 def GatherMode : I64EnumAttr<
@@ -97,8 +87,6 @@ def GatherMode : I64EnumAttr<
       I64EnumAttrCase<"nd", 1>,
     ]> {
   let cppNamespace = "pmlc::util";
-  let returnType = "GatherMode";
-  let convertFromStorage = "static_cast<" # returnType # ">($_self.getValue().getZExtValue())";
 }
 
 def ScatterMode : I64EnumAttr<
@@ -111,8 +99,6 @@ def ScatterMode : I64EnumAttr<
       I64EnumAttrCase<"update_nd", 3>,
     ]> {
   let cppNamespace = "pmlc::util";
-  let returnType = "ScatterMode";
-  let convertFromStorage = "static_cast<" # returnType # ">($_self.getValue().getZExtValue())";
 }
 
 def MemUse : I64EnumAttr<
@@ -125,7 +111,6 @@ def MemUse : I64EnumAttr<
       I64EnumAttrCase<"read_write", 3>,
     ]> {
   let cppNamespace = "pmlc::util";
-  let returnType = "MemUse";
 }
 
 #endif // __PML_UTIL_ENUMS__

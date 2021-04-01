@@ -42,9 +42,9 @@ struct TraceLinkingPass : public TraceLinkingBase<TraceLinkingPass> {
       builder.create<LLVM::CallOp>(loc, ArrayRef<Type>{}, traceRef,
                                    ArrayRef<Value>{msgValue});
       builder.create<LLVM::ReturnOp>(loc, ArrayRef<Value>{});
-      op.removeAttr("id");
-      op.removeAttr("msg");
-      op.removeAttr("trace");
+      op->removeAttr("id");
+      op->removeAttr("msg");
+      op->removeAttr("trace");
     });
   }
 
@@ -79,7 +79,7 @@ struct TraceLinkingPass : public TraceLinkingBase<TraceLinkingPass> {
     const char *symbol = "plaidml_rt_trace";
     auto *context = module.getContext();
     if (module.lookupSymbol(symbol)) {
-      return SymbolRefAttr::get(symbol, context);
+      return SymbolRefAttr::get(context, symbol);
     }
     OpBuilder::InsertionGuard insertGuard(builder);
     builder.setInsertionPointToStart(module.getBody());
@@ -88,7 +88,7 @@ struct TraceLinkingPass : public TraceLinkingBase<TraceLinkingPass> {
     auto funcType =
         LLVM::LLVMFunctionType::get(voidTy, {msgTy}, /*isVarArg=*/false);
     builder.create<LLVM::LLVMFuncOp>(loc, symbol, funcType);
-    return SymbolRefAttr::get(symbol, context);
+    return SymbolRefAttr::get(context, symbol);
   }
 };
 

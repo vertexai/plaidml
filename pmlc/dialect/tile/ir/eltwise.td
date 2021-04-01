@@ -18,15 +18,15 @@ def ConstantOp :
   let results = (outs EltwiseAny:$result);
 
   let builders = [
-    OpBuilderDAG<(ins "mlir::Type":$type, "double":$value), [{
+    OpBuilder<(ins "mlir::Type":$type, "double":$value), [{
       $_state.addAttribute("value", $_builder.getF64FloatAttr(value));
       $_state.addTypes(RankedTensorType::get({}, type));
     }]>,
-    OpBuilderDAG<(ins "mlir::Type":$type, "int64_t":$value), [{
+    OpBuilder<(ins "mlir::Type":$type, "int64_t":$value), [{
       $_state.addAttribute("value", $_builder.getI64IntegerAttr(value));
       $_state.addTypes(RankedTensorType::get({}, type));
     }]>,
-    OpBuilderDAG<(ins "mlir::Type":$type, "uint64_t":$value), [{
+    OpBuilder<(ins "mlir::Type":$type, "uint64_t":$value), [{
       $_state.addAttribute("value", $_builder.getI64IntegerAttr(value));
       $_state.addTypes(RankedTensorType::get({}, type));
     }]>,

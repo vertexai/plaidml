@@ -219,7 +219,7 @@ void PadConstraintsPass::runOnFunction() {
         savedConstraints.push_back(expr);
     }
     if (savedConstraints.empty()) {
-      op.removeAttr(ContractionOp::getConstraintsAttrName());
+      op->removeAttr(ContractionOp::getConstraintsAttrName());
     } else {
       op.setConstraints(makeConstraintSet(numDims, savedConstraints));
     }

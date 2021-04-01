@@ -47,7 +47,7 @@ steps:
     async: false
     build:
       message: "${BUILDKITE_MESSAGE}"
-      commit: "9cdb3ed3218d782115996c700b322828e9c357a6"
+      commit: "3089ca537808c6c227c98156932af2da0a7eb54a"
       env:
         PLAIDML_COMMIT: "${BUILDKITE_COMMIT}"
         BUILDKITE_PULL_REQUEST: "${BUILDKITE_PULL_REQUEST}"

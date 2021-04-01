@@ -28,7 +28,7 @@ def ABI_LoopOp : ABI_Op<"loop", [
   }];
   let regions = (region AnyRegion:$initRegion, AnyRegion:$bodyRegion, AnyRegion:$finiRegion);
   let arguments = (ins TypeArrayAttr:$networkFieldTypes);
-  let builders = [OpBuilderDAG<(ins)>];
+  let builders = [OpBuilder<(ins)>];
   let skipDefaultBuilders = 1;
   let assemblyFormat = [{
      `init` $initRegion `yield` $networkFieldTypes `body` $bodyRegion `fini` $finiRegion attr-dict

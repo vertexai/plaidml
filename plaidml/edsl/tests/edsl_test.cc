@@ -440,6 +440,8 @@ TEST_F(CppEdsl, DotF16) {
   // CHECK-SAME: tensor<f16>, tensor<8x16xf16>, tensor<16x32xf16> -> tensor<8x32xf16>
   // CHECK: return %[[cion]] : tensor<8x32xf16>
   // clang-format on
+
+  runProgram(program);
 }
 
 TEST_F(CppEdsl, DotF16_AccF32) {

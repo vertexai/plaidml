@@ -43,9 +43,6 @@ def AnyScalar : Type<Or<[
     APUnsignedIntegerType.predicate
   ]>, "scalar">;
 
-class RankedTensorOf<list<Type> allowedTypes> : ShapedContainerType<
-    allowedTypes, CPred<"$_self.isa<RankedTensorType>()">, "ranked-tensor">;
-
 def EltwiseAny : Type<RankedTensorOf<[AnyScalar]>.predicate,
   "eltwise-any">;
 
@@ -81,8 +78,6 @@ def SortDirection : I64EnumAttr<
       I64EnumAttrCase<"desc", 1>,
     ]> {
   let cppNamespace = "pmlc::dialect::tile";
-  let returnType = "SortDirection";
-  let convertFromStorage = "static_cast<" # returnType # ">($_self.getValue().getZExtValue())";
 }
 
 #endif // __PML_TILE_BASE__

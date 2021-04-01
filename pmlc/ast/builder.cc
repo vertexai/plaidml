@@ -9,6 +9,7 @@
 #include <unordered_set>
 #include <vector>
 
+#include "mlir/Dialect/Math/IR/Math.h"
 #include "mlir/Dialect/StandardOps/IR/Ops.h"
 #include "mlir/IR/BlockAndValueMapping.h"
 #include "mlir/IR/Matchers.h"
@@ -476,6 +477,7 @@ struct ProgramBuilder {
         module(*program->module), builder(module) {
     context->getOrLoadDialect<dialect::tile::TileDialect>();
     context->getOrLoadDialect<dialect::layer::LayerDialect>();
+    context->getOrLoadDialect<math::MathDialect>();
     context->getOrLoadDialect<StandardOpsDialect>();
   }
 
@@ -812,14 +814,21 @@ struct ProgramBuilder {
       throw std::runtime_error(
           "'argsort' requires operand #2 to be a constant integer.");
     }
-    IntegerAttr directionAttr;
-    if (!matchPattern(direction, m_Constant(&directionAttr))) {
+    IntegerAttr dirIntAttr;
+    if (!matchPattern(direction, m_Constant(&dirIntAttr))) {
       throw std::runtime_error(
           "'argsort' requires operand #3 to be a constant integer.");
     }
+    Optional<tile::SortDirection> dir =
+        tile::symbolizeSortDirection(dirIntAttr.getInt());
+    if (!dir) {
+      throw std::runtime_error(
+          "'argsort' requires operand #3 to be a valid SortDirection.");
+    }
+    auto dirAttr = tile::SortDirectionAttr::get(context, *dir);
     IntegerAttr axisIndexAttr = builder.getIndexAttr(axisAttr.getInt());
     auto op = builder.create<tile::ArgSortOp>(loc, resultType, tensor,
-                                              axisIndexAttr, directionAttr);
+                                              axisIndexAttr, dirAttr);
     return op.result();
   }
 

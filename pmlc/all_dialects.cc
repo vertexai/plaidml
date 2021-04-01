@@ -6,6 +6,7 @@
 #include "mlir/Dialect/GPU/GPUDialect.h"
 #include "mlir/Dialect/LLVMIR/LLVMDialect.h"
 #include "mlir/Dialect/Linalg/IR/LinalgOps.h"
+#include "mlir/Dialect/Math/IR/Math.h"
 #include "mlir/Dialect/OpenMP/OpenMPDialect.h"
 #include "mlir/Dialect/SCF/SCF.h"
 #include "mlir/Dialect/SPIRV/IR/SPIRVDialect.h"
@@ -30,8 +31,9 @@ void registerAllDialects(DialectRegistry &registry) {
                   gpu::GPUDialect,                    //
                   LLVM::LLVMDialect,                  //
                   linalg::LinalgDialect,              //
-                  scf::SCFDialect,                    //
+                  math::MathDialect,                  //
                   omp::OpenMPDialect,                 //
+                  scf::SCFDialect,                    //
                   spirv::SPIRVDialect,                //
                   StandardOpsDialect,                 //
                   tensor::TensorDialect,              //

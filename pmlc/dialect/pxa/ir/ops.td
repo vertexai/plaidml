@@ -29,7 +29,7 @@ def AnyStdScalar : AnyTypeOf<[AnyFloat, AnySignlessInteger]> {}
 class PxaReduceOpBase<string mnemonic, list<OpTrait> traits = []> :
     PXA_OpWithPP<mnemonic, !listconcat(traits,
         [DeclareOpInterfaceMethods<PxaReduceOpInterface>,
-        DeclareOpInterfaceMethods<MemRefDereferencingInterface>, 
+        DeclareOpInterfaceMethods<AffineMapAccessInterface>,
         MemRefsNormalizable])> {
 
   code extraClassDeclarationBase = [{
@@ -62,7 +62,7 @@ def PxaReduceOp : PxaReduceOpBase<"reduce"> {
   let hasFolder = 1;
 
   let builders = [
-    OpBuilderDAG<(ins
+    OpBuilder<(ins
       "mlir::AtomicRMWKind":$agg,
       "mlir::Value":$val,
       "mlir::Value":$mem,
@@ -90,7 +90,7 @@ def PxaGemmOp : PXA_OpWithPP<"gemm"> {
     AffineMapAttr:$bAccessMap,
     AffineMapAttr:$bTileMap,
     I64ArrayAttr:$tile,
-    I64Attr:$numBatches,
+    I64ArrayAttr:$numBatches,
     Variadic<Index>:$mapOperands);
   let results = (outs AnyMemRef:$out);
 
@@ -118,7 +118,7 @@ def PxaVectorReduceOp : PxaReduceOpBase<"vector_reduce"> {
   let hasFolder = 1;
 
   let builders = [
-    OpBuilderDAG<(ins
+    OpBuilder<(ins
       "mlir::AtomicRMWKind":$agg,
       "mlir::Value":$vector,
       "mlir::Value":$mem,
@@ -140,7 +140,7 @@ def PxaVectorReduceOp : PxaReduceOpBase<"vector_reduce"> {
 class PxaLoadOpBase<string mnemonic, list<OpTrait> traits = []> :
     PXA_OpWithPP<mnemonic, !listconcat(traits,
         [DeclareOpInterfaceMethods<PxaReadOpInterface>,
-        DeclareOpInterfaceMethods<MemRefDereferencingInterface>, 
+        DeclareOpInterfaceMethods<AffineMapAccessInterface>,
         MemRefsNormalizable])> {
   let arguments = (ins
     AnyMemRef:$memref,
@@ -189,17 +189,17 @@ def PxaLoadOp : PxaLoadOpBase<"load", [NoSideEffect]> {
 
   let builders = [
     /// Builds an affine load op with the specified map and operands.
-    OpBuilderDAG<(ins
+    OpBuilder<(ins
       "mlir::AffineMap":$map,
       "mlir::ValueRange":$operands
     )>,
     /// Builds an affine load op with an identity map and operands.
-    OpBuilderDAG<(ins
+    OpBuilder<(ins
       "mlir::Value":$memref,
       CArg<"mlir::ValueRange", "{}">:$indices
     )>,
     /// Builds an affine load op with the specified map and its operands.
-    OpBuilderDAG<(ins
+    OpBuilder<(ins
       "mlir::Value":$memref,
       "mlir::AffineMap":$map,
       "mlir::ValueRange":$mapOperands
@@ -255,7 +255,7 @@ def PxaVectorLoadOp : PxaLoadOpBase<"vector_load"> {
   let results = (outs AnyVector:$result);
 
   let builders = [
-    OpBuilderDAG<(ins
+    OpBuilder<(ins
       "mlir::VectorType":$type,
       "mlir::Value":$memref,
       "mlir::AffineMap":$map,
@@ -271,6 +271,36 @@ def PxaVectorLoadOp : PxaLoadOpBase<"vector_load"> {
 
   let hasCanonicalizer = 1;
   let hasFolder = 1;
+}
+
+def PxaStoreOp : PXA_OpWithPP<"store", [MemRefsNormalizable]> {
+  let summary = "PXA non-affine store operation";
+
+  let arguments = (ins
+      AtomicRMWKindAttr:$agg,
+      AnyTypeOf<[AnySignlessInteger, AnyFloat, AnyVector]>:$value,
+      MemRefOf<[AnySignlessInteger, AnyFloat]>:$memref,
+      Variadic<Index>:$indices);
+  let results = (outs MemRefOf<[AnySignlessInteger, AnyFloat]>:$result);
+
+  let assemblyFormat = [{
+    $agg $value `,` $memref `[` $indices `]` attr-dict `:` `(` type($value) `,`
+    type($memref) `)` `->` type($result)
+  }];
+
+  let hasCanonicalizer = 1;
+  let hasFolder = 1;
+
+  let builders = [
+    OpBuilder<(ins
+      "mlir::AtomicRMWKind":$agg,
+      "mlir::Value":$val,
+      "mlir::Value":$mem,
+      "mlir::ValueRange":$idxs
+    ), [{
+      build($_builder, $_state, mem.getType(), agg, val, mem, idxs);
+    }]>
+  ];
 }
 
 // def AffineGreyboxOp : PXA_OpWithPP<"greybox", [

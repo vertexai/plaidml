@@ -27,7 +27,6 @@ plaidml_cc_library(
         "runtime_registry.h",
         "symbol_registry.h",
     ],
-    copts = ["-w"],
     visibility = ["//visibility:public"],
     deps = [
         "//pmlc/compiler",
@@ -41,7 +40,8 @@ plaidml_cc_library(
         "@llvm-project//llvm:X86AsmParser",
         "@llvm-project//llvm:X86CodeGen",
         "@llvm-project//mlir:ExecutionEngineUtils",
-        "@llvm-project//mlir:TargetLLVMIR",
+        "@llvm-project//mlir:LLVMToLLVMIRTranslation",
+        "@llvm-project//mlir:OpenMPToLLVMIRTranslation",
         "@llvm-project//mlir:Transforms",
         "@llvm-project//mlir:mlir_runner_utils",
         "@xsmm",

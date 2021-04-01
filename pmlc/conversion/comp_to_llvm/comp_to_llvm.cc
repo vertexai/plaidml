@@ -5,6 +5,7 @@
 #include "mlir/Conversion/StandardToLLVM/ConvertStandardToLLVMPass.h"
 #include "mlir/Dialect/GPU/GPUDialect.h"
 #include "mlir/Dialect/LLVMIR/LLVMDialect.h"
+#include "mlir/Dialect/Math/Transforms/Passes.h"
 #include "mlir/Dialect/SPIRV/IR/SPIRVOps.h"
 #include "mlir/Dialect/StandardOps/IR/Ops.h"
 #include "mlir/Dialect/StandardOps/Transforms/Passes.h"
@@ -156,7 +157,9 @@ class ConvertScheduleCompute
     auto loc = op->getLoc();
     auto llvmInt8Ptr =
         LLVM::LLVMPointerType::get(IntegerType::get(op->getContext(), 8));
-    auto dict = DictionaryAttr::get(op->getAttrs(), op->getContext());
+    SmallVector<NamedAttribute, 8> sortedAttrs;
+    DictionaryAttr::sort(op->getAttrs(), sortedAttrs);
+    auto dict = DictionaryAttr::getWithSorted(op->getContext(), sortedAttrs);
     comp::ScheduleComputeAdaptor adaptor(operands, dict);
 
     // Make operand list

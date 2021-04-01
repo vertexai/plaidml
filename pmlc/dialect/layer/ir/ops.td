@@ -28,7 +28,7 @@ def BoxOp : LayerOp<"box", [IsolatedFromAbove]> {
 
   let skipDefaultBuilders = 1;
   let builders = [
-    OpBuilderDAG<(ins
+    OpBuilder<(ins
       "mlir::StringRef":$op,
       "mlir::ArrayRef<mlir::Value>":$operands,
       "mlir::ArrayRef<mlir::Type>":$resultTypes,

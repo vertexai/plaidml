@@ -149,6 +149,7 @@ class Configure:
             '-DENABLE_GNA=OFF',
             '-DENABLE_MKL_DNN=OFF',
             '-DENABLE_MYRIAD=OFF',
+            '-DENABLE_PYTHON=ON',
             '-DENABLE_SPEECH_DEMO=OFF',
             '-DENABLE_TESTS=ON',
             '-DENABLE_VPU=OFF',

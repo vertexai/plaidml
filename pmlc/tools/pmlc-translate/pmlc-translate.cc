@@ -78,7 +78,8 @@ int main(int argc, char **argv) {
     // diagnostics were produced as expected.
     mlir::SourceMgrDiagnosticVerifierHandler sourceMgrHandler(sourceMgr,
                                                               &context);
-    (*translationRequested)(sourceMgr, os, &context);
+    if (failed((*translationRequested)(sourceMgr, os, &context)))
+      return failure();
     return sourceMgrHandler.verify();
   };
 

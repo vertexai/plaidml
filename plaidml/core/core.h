@@ -150,6 +150,7 @@ enum class DType {
   FLOAT16 = PLAIDML_DATA_FLOAT16,
   FLOAT32 = PLAIDML_DATA_FLOAT32,
   FLOAT64 = PLAIDML_DATA_FLOAT64,
+  _LAST,
 };
 
 inline const char* to_string(DType dtype) {

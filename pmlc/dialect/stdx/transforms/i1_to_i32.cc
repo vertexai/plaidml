@@ -329,7 +329,9 @@ struct I1StorageToI32Pass : public I1StorageToI32Base<I1StorageToI32Pass> {
       }
 
     populateI1StorageToI32(context, patterns);
-    applyPatternsAndFoldGreedily(getOperation(), std::move(patterns));
+    if (failed(
+            applyPatternsAndFoldGreedily(getOperation(), std::move(patterns))))
+      signalPassFailure();
   }
 };
 

@@ -55,6 +55,8 @@ test:linux --test_tag_filters=-latex,-macos,-pytorch,-skip_linux,-windows
 build:macos --apple_platform_type=macos
 build:macos --cpu=darwin_x86_64
 build:macos --cxxopt=-std=c++17
+build:macos --host_cpu=darwin_x86_64
+build:macos --host_cxxopt=-std=c++17
 build:macos --define=compiler=clang
 build:macos --build_tag_filters=-large,-linux,-skip_macos,-windows
 test:macos --test_tag_filters=-large,-linux,-skip_macos,-windows

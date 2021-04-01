@@ -136,7 +136,7 @@ void pipelineBuilder(OpPassManager &pm,
 
   // Unroll affine.for loops.
   pm.addNestedPass<FuncOp>(pmlc::dialect::affinex::createAffinexLoopUnroll(
-      /*operationLimit =*/2048));
+      /*operationLimit=*/2048));
   pm.addPass(createCanonicalizerPass());
   pm.addPass(createCSEPass());
 
