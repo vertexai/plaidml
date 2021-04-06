@@ -261,10 +261,12 @@ void pipelineBuilder(OpPassManager &pm) {
 
   // Use OMP thread count
   unsigned maxThreads = omp_get_max_threads();
+  IVLOG(0, "omp max threads: "<<maxThreads);
   unsigned physCores = getPhysicalCoreNumber();
   if (0 != physCores) {
     maxThreads = std::min(physCores, maxThreads);
   }
+  IVLOG(0, "actual max threads: "<<maxThreads);
 
   pm.addNestedPass<FuncOp>(pxa::createCPUThreadPass(maxThreads));
 

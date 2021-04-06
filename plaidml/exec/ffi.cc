@@ -89,6 +89,7 @@ double plaidml_executable_run(  //
     plaidml_buffer** outputs) {
   return ffi_wrap<double>(err, 0.0, [&] {  //
     llvm::SmallVector<BufferPtr, 8> inputBuffers;
+    IVLOG(0, "pml exec run: started");
     if (exec->program->inputs.size() != ninputs) {
       throw std::runtime_error(
           llvm::formatv("Program expects {0} inputs, but {1} were specified", exec->program->inputs.size(), ninputs));
@@ -97,6 +98,7 @@ double plaidml_executable_run(  //
       throw std::runtime_error(llvm::formatv("Program expects {0} outputs, but {1} were specified",
                                              exec->program->outputs.size(), noutputs));
     }
+    IVLOG(0, "ping 1");
     for (unsigned i = 0; i < ninputs; i++) {
       TensorShape actual = inputs[i]->buffer->shape();
       TensorShape expected = TensorShape::fromType(exec->program->inputs[i]);
@@ -107,6 +109,8 @@ double plaidml_executable_run(  //
       }
       inputBuffers.push_back(inputs[i]->buffer);
     }
+    
+    IVLOG(0, "pml exec run: ping 2");
     llvm::SmallVector<BufferPtr, 8> outputBuffers;
     for (unsigned i = 0; i < noutputs; i++) {
       TensorShape actual = outputs[i]->buffer->shape();
@@ -118,7 +122,11 @@ double plaidml_executable_run(  //
       }
       outputBuffers.push_back(outputs[i]->buffer);
     }
-    return exec->exec->invoke(inputBuffers, outputBuffers);
+    IVLOG(0, "pml exec run: ping 3");
+    auto ret = exec->exec->invoke(inputBuffers, outputBuffers);
+    IVLOG(0, "pml exec run: done");
+    
+    return ret;
   });
 }
 

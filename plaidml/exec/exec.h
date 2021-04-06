@@ -11,6 +11,8 @@
 #include "plaidml/edsl/edsl.h"
 #include "plaidml/exec/ffi.h"
 
+#include <iostream>
+
 namespace plaidml {
 namespace exec {
 
@@ -82,6 +84,7 @@ class Executable {
   ///
   double run(const std::vector<Buffer>& inputs,  //
              const std::vector<Buffer>& outputs) {
+    std::cout<<"Entering exec:run()"<<std::endl;
     std::vector<plaidml_buffer*> raw_inputs(inputs.size());
     for (size_t i = 0; i < inputs.size(); i++) {
       raw_inputs[i] = inputs[i].as_ptr();
@@ -90,13 +93,16 @@ class Executable {
     for (size_t i = 0; i < raw_outputs.size(); i++) {
       raw_outputs[i] = outputs[i].as_ptr();
     }
-    return ffi::call<double>(    //
+    std::cout<<"Entering call to plaidml_exec_run"<<std::endl;
+    auto ret = ffi::call<double>(    //
         plaidml_executable_run,  //
         ptr_.get(),              //
         raw_inputs.size(),       //
         raw_inputs.data(),       //
         raw_outputs.size(),      //
         raw_outputs.data());
+    std::cout<<"Exitting exec:run()"<<std::endl;
+    return ret;
   }
 
  private:

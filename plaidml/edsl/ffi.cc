@@ -306,6 +306,7 @@ plaidml_expr* plaidml_expr_cast(  //
   return ffi_wrap<plaidml_expr*>(err, nullptr, [&] {
     IVLOG(3, "plaidml_expr_cast");
     auto node = std::make_shared<ast::ExprNodeCast>(convertFromDataType(dtype), expr->node);
+    IVLOG(0, "Cast node: "<<node);
     LayerContext::get()->addNode(node);
     return new plaidml_expr{node};
   });

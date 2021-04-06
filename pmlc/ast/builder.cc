@@ -611,6 +611,7 @@ struct ProgramBuilder {
   }
 
   Value handleCast(ExprNodeCast *node) {
+    IVLOG(0, "Handling cast");
     TensorShape shape = evaluator.getShape(node);
     Type elementType = builder.getElementType(shape.elementType);
     RankedTensorType resultType =

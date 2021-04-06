@@ -282,13 +282,15 @@ struct OrcJITEngineImpl : EngineImpl {
     // string before returning. Alternatively, ORC JIT should consider copying
     // the string into the error message.
     auto expectedSymbol = jit->lookup(symbol);
+    IVLOG(0, "Got expected symbol");
     if (!expectedSymbol) {
       std::string errorMessage;
       llvm::raw_string_ostream os(errorMessage);
       llvm::handleAllErrors(expectedSymbol.takeError(),
-                            [&os](llvm::ErrorInfoBase &ei) { ei.log(os); });
+                            [&os](llvm::ErrorInfoBase &ei) { ei.log(os); }); // Issue here?
       throw std::runtime_error(os.str());
     }
+    IVLOG(0, "Checked expected symbol");
 
     auto addr = expectedSymbol->getAddress();
     return reinterpret_cast<Function>(addr);
@@ -386,7 +388,7 @@ public:
     }
 
     if (jitInit) {
-      IVLOG(3, "Doing jit init");
+      IVLOG(0, "Doing jit init");
       std::vector<void *> initPtrs;
       std::vector<MemRefDescriptor> initDescriptors;
       std::copy(preParams.begin(), preParams.end(),
@@ -397,32 +399,38 @@ public:
         initPtrs.push_back(initDescriptors.back().ptr());
       }
       initPack = jitInit(initPtrs.data());
-      IVLOG(3, "Jit init complete");
+      IVLOG(0, "Jit init complete");
     }
   }
   ~JitExecutable() {
+    IVLOG(0, "Deleting executable");
     if (jitFini) {
-      IVLOG(3, "Doing jit fini");
+      IVLOG(0, "Doing jit fini");
       std::vector<void *> finiPtrs;
       finiPtrs.push_back(initPack);
-      IVLOG(3, "Jit fini complete");
+      IVLOG(0, "Jit fini complete");
       free(initPack);
     }
   }
 
   double invoke(mlir::ArrayRef<util::BufferPtr> inputBuffers,
                 mlir::ArrayRef<util::BufferPtr> outputBuffers) final {
+    IVLOG(0, "Entering invoke");
     StopWatch stopWatch;
-    if (VLOG_IS_ON(1)) {
+    if (VLOG_IS_ON(0)) {
       stopWatch.start();
     }
     bindArguments(inputBuffers, outputBuffers);
+    IVLOG(0, "bound arguments");
     jitMain(ptrs.data());
-    if (VLOG_IS_ON(1)) {
+    IVLOG(0, "jitMain called");
+    if (VLOG_IS_ON(0)) {
       stopWatch.stop();
-      IVLOG(1, "Execution time: " << stopWatch.delta_ms() << "ms");
+      IVLOG(0, "Execution time: " << stopWatch.delta_ms() << "ms");
     }
-    return device->execTimeInMS;
+    auto ret = device->execTimeInMS;
+    IVLOG(0, "Exitting invoke");
+    return ret;
   }
 
   void bindArguments(ArrayRef<util::BufferPtr> inputBuffers,

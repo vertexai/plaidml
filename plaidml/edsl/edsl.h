@@ -10,6 +10,7 @@
 #include <unordered_map>
 #include <utility>
 #include <vector>
+#include <iostream>
 
 #include "plaidml/core/core.h"
 #include "plaidml/edsl/ffi.h"
@@ -863,6 +864,7 @@ inline Tensor atanh(const Tensor& x, edsl_source_location loc = edsl_source_loca
 /// \return Tensor
 ///
 inline Tensor cast(const Tensor& x, DType dtype, edsl_source_location loc = edsl_source_location::current()) {
+  std::cout<<"Casting "<<to_string(x.dtype())<<" to "<<to_string(dtype)<<std::endl;
   return Tensor{ffi::call<plaidml_expr*>(loc, plaidml_expr_cast, x.as_ptr(), static_cast<plaidml_datatype>(dtype))};
 }
 
