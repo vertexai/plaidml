@@ -20,6 +20,8 @@ std::unique_ptr<mlir::Pass> createPadRangesPass();
 
 std::unique_ptr<mlir::Pass> createPadConstraintsPass();
 
+std::unique_ptr<mlir::Pass> createReorderInputsPass();
+
 std::unique_ptr<mlir::Pass> createSplitMainPass();
 
 /// Generate the code for registering passes.

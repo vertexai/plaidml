@@ -11,6 +11,7 @@ pml_cc_library(
     pad_constraints.cc
     pad_ranges.cc
     padding.cc
+    reorder_inputs.cc
     split_main.cc
   DEPS
     LLVMSupport

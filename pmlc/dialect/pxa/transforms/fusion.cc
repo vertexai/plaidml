@@ -183,6 +183,8 @@ struct FusionInfo {
            "Fusion ops should read/write the same memref and thus have the "
            "same rank");
     // Try to relate the block arguments
+    aInfo.tileSizes.resize(stridesA.size(), 1);
+    bInfo.tileSizes.resize(stridesB.size(), 1);
     for (size_t i = 0; i < stridesA.size(); i++) {
       const auto &sa = stridesA[i];
       const auto &sb = stridesB[i];
@@ -192,8 +194,11 @@ struct FusionInfo {
         return false;
       }
       // If both are empty, nothing to do
-      if (sa.strides.size() == 0 && sb.strides.size() == 0)
+      if (sa.strides.size() == 0 && sb.strides.size() == 0) {
+        aInfo.tileSizes.pop_back();
+        bInfo.tileSizes.pop_back();
         continue;
+      }
       // If there are multiple indexes, give up
       IVLOG(3, "sa: " << debugString(sa));
       IVLOG(3, "sb: " << debugString(sb));
@@ -226,17 +231,12 @@ struct FusionInfo {
         if (!tileSize)
           return false;
         if (reverseFusion && (subgroupSizeA == 1 || sameSubgroups)) {
-          aInfo.tileSizes.push_back(tileSize);
+          aInfo.tileSizes[argA.getArgNumber()] = tileSize;
           aInfo.needsTiling = true;
         } else if (subgroupSizeB == 1 || sameSubgroups) {
-          bInfo.tileSizes.push_back(tileSize);
+          bInfo.tileSizes[argB.getArgNumber()] = tileSize;
           bInfo.needsTiling = true;
         }
-      } else {
-        if (reverseFusion)
-          aInfo.tileSizes.push_back(1);
-        else
-          bInfo.tileSizes.push_back(1);
       }
 
       // Also fail if the AP's don't have the same lower bound

@@ -14,10 +14,15 @@ void clearTags(mlir::Operation *op);
 void clearTag(mlir::Operation *op, llvm::StringRef name);
 void setUnitTag(mlir::Operation *op, llvm::StringRef name);
 void setIntegerTag(mlir::Operation *op, llvm::StringRef name, int64_t val);
+void setStringTag(mlir::Operation *op, llvm::StringRef name,
+                  llvm::StringRef val);
 bool hasUnitTag(mlir::Operation *op, llvm::StringRef name);
 bool hasIntegerTag(mlir::Operation *op, llvm::StringRef name);
+bool hasStringTag(mlir::Operation *op, llvm::StringRef name);
 int64_t getIntegerTag(mlir::Operation *op, llvm::StringRef name,
                       int64_t defaultVal);
+llvm::StringRef getStringTag(mlir::Operation *op, llvm::StringRef name,
+                             llvm::StringRef defaultVal);
 
 // Templated versions
 template <typename T>

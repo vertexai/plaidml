@@ -10,6 +10,7 @@ pml_cc_library(
     enums.cc.inc
     env.h
     ident.h
+    layout.h
     logging.h
     matchers.h
     memuse.h
@@ -21,6 +22,7 @@ pml_cc_library(
     enums.cc
     env.cc
     ident.cc
+    layout.cc
     logging.cc
     memuse.cc
     shape.cc

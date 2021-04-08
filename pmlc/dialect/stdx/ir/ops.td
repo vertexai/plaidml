@@ -28,7 +28,7 @@ class StdX_Op<string mnemonic, list<OpTrait> traits = []> :
 }
 
 def ReshapeOp : StdX_Op<"reshape",
-  [DeclareOpInterfaceMethods<ViewLikeOpInterface>]> {
+  [DeclareOpInterfaceMethods<ViewLikeOpInterface>, MemRefsNormalizable]> {
   let summary = "tensor reshape operation";
   let arguments = (ins AnyMemRef:$tensor);
   let results = (outs AnyMemRef:$result);
@@ -38,7 +38,7 @@ def ReshapeOp : StdX_Op<"reshape",
   let verifier = ?;
 }
 
-class StdX_UnaryFuncOp<string mnemonic, list<OpTrait> traits = [NoSideEffect]> :
+class StdX_UnaryFuncOp<string mnemonic, list<OpTrait> traits = [NoSideEffect, MemRefsNormalizable]> :
     Op<StdX_Dialect, mnemonic, traits> {
   let arguments = (ins AnyType:$value);
   let results = (outs AnyType);
@@ -165,14 +165,14 @@ def SubgroupBlockWriteINTELOp : StdX_Op<"subgroup_block_write_intel", [NoSideEff
   }];
 }
 
-def PackOp : Op<StdX_Dialect, "pack"> {
+def PackOp : Op<StdX_Dialect, "pack", [MemRefsNormalizable]> {
   let summary = "Pack multiple values into a tuple";
   let arguments = (ins Variadic<AnyType>:$in);
   let results = (outs Argpack:$out);
   let assemblyFormat = [{ $in `:` type($in) attr-dict }];
 }
 
-def UnpackOp : Op<StdX_Dialect, "unpack"> {
+def UnpackOp : Op<StdX_Dialect, "unpack", [MemRefsNormalizable]> {
   let summary = "Pack multiple values into a tuple";
   let arguments = (ins Argpack:$in);
   let results = (outs Variadic<AnyType>:$out);

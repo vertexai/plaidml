@@ -7,6 +7,9 @@
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/Support/Process.h"
 
+#include "mlir/IR/AffineMap.h"
+#include "pmlc/util/layout.h"
+
 using namespace mlir; // NOLINT
 
 namespace pmlc::util {
@@ -140,6 +143,36 @@ void wrapFunctionAndPackArguments(llvm::Module *module, StringRef funcName,
   } else {
     builder.CreateRet(val);
   }
+}
+
+AffineMap updateMemRefWithLayoutMap(MLIRContext *context, int64_t rank,
+                                    TensorLayout layout) {
+  auto spatialNum = (rank == 4 || rank == 5) ? 2 : 0;
+
+  SmallVector<AffineExpr, 4> dimExprs;
+  dimExprs.reserve(rank);
+  if (layout == TensorLayout::ncx) {
+    dimExprs.push_back(mlir::getAffineDimExpr(0, context));
+    for (auto spat = 0; spat < spatialNum; spat++) {
+      dimExprs.push_back(
+          mlir::getAffineDimExpr(rank - spatialNum + spat, context));
+    }
+    dimExprs.push_back(mlir::getAffineDimExpr(1, context));
+  } else if (layout == TensorLayout::kcx) {
+    for (auto spat = 0; spat < spatialNum; spat++) {
+      dimExprs.push_back(
+          mlir::getAffineDimExpr(rank - spatialNum + spat, context));
+    }
+    dimExprs.push_back(mlir::getAffineDimExpr(1, context));
+    dimExprs.push_back(mlir::getAffineDimExpr(0, context));
+  } else if (layout == TensorLayout::gkcx) {
+    dimExprs.push_back(mlir::getAffineDimExpr(3, context));
+    dimExprs.push_back(mlir::getAffineDimExpr(4, context));
+    dimExprs.push_back(mlir::getAffineDimExpr(2, context));
+    dimExprs.push_back(mlir::getAffineDimExpr(1, context));
+    dimExprs.push_back(mlir::getAffineDimExpr(0, context));
+  }
+  return AffineMap::get(rank, 0, dimExprs, context);
 }
 
 } // namespace pmlc::util

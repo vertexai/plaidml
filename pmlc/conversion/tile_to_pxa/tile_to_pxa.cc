@@ -629,6 +629,14 @@ struct BufferAllocator {
 
     // Make an allocation for the output
     memRefType = MemRefType::get(shape, elementType);
+
+    // Set affine map based on layout
+    if (util::hasLayoutTag(op)) {
+      auto map = util::updateMemRefWithLayoutMap(
+          op->getContext(), rankedTensorType.getRank(), util::getLayoutTag(op));
+      memRefType = MemRefType::Builder(memRefType).setAffineMaps({map});
+    }
+
     resultMemRef = builder.create<AllocOp>(loc, memRefType);
     if (maybePadding) {
       auto initValue = createInit(builder, loc, elementType, maybePadding->agg);
@@ -1567,8 +1575,19 @@ struct ReshapeOpConversion : public OpConversionPattern<tile::ReshapeOp> {
 
     auto tensor = adaptor.tensor();
 
+    mlir::Type resultType;
+
     TypeConverter typeConverter;
-    auto resultType = typeConverter.convertType(op.result().getType());
+    // Set affine map based on layout
+    if (util::hasLayoutTag(op)) {
+      auto rankedTensorType = getRankedTensorType(op.result().getType());
+      auto map = util::updateMemRefWithLayoutMap(
+          op->getContext(), rankedTensorType.getRank(), util::getLayoutTag(op));
+      resultType = MemRefType::get(rankedTensorType.getShape(),
+                                   rankedTensorType.getElementType(), {map});
+    } else {
+      resultType = typeConverter.convertType(op.result().getType());
+    }
 
     rewriter.replaceOpWithNewOp<stdx::ReshapeOp>(op, resultType, tensor);
     return success();
@@ -1976,7 +1995,24 @@ struct UnpackOpConversion : public OpConversionPattern<stdx::UnpackOp> {
                   ConversionPatternRewriter &rewriter) const final {
     SmallVector<Type, 8> newResultTypes;
     TypeConverter typeConverter;
-    for (auto type : op.getResultTypes()) {
+    TypeRange resultTypes = op.getResultTypes();
+
+    // To align the result types with the pack op, use the ones
+    // directly from packOp. In case it is not found perform
+    // regular op conversion based on the stdx.unpack
+    auto moduleOp = op->getParentOfType<ModuleOp>();
+    if (moduleOp) {
+      auto initFunc = moduleOp.lookupSymbol<mlir::FuncOp>("init");
+      if (initFunc) {
+        auto packOps = initFunc.getOps<pmlc::dialect::stdx::PackOp>();
+        if (!packOps.empty()) {
+          auto packOp = *packOps.begin();
+          resultTypes = packOp.getOperandTypes();
+        }
+      }
+    }
+
+    for (auto type : resultTypes) {
       if (auto tensorType = type.dyn_cast<TensorType>()) {
         if (tensorType.getRank() == 0) {
           auto newType = typeConverter.convertType(tensorType.getElementType());
@@ -2225,6 +2261,7 @@ struct LowerTileToPXAPass : public LowerTileToPXABase<LowerTileToPXAPass> {
       signalPassFailure();
       return;
     }
+    IVLOG(1, "Func: " << debugString(*getOperation()));
   }
 };
 } // namespace

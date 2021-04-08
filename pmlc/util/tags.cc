@@ -1,3 +1,4 @@
+// Copyright 2020 Intel Corporation
 #include "pmlc/util/tags.h"
 
 #include "mlir/IR/BuiltinTypes.h"
@@ -45,6 +46,13 @@ void setIntegerTag(mlir::Operation *op, llvm::StringRef name, int64_t val) {
   op->setAttr(tagDict(), dict.getDictionary(op->getContext()));
 }
 
+void setStringTag(mlir::Operation *op, llvm::StringRef name,
+                  llvm::StringRef val) {
+  NamedAttrList dict = op->getAttrOfType<DictionaryAttr>(tagDict());
+  dict.set(name, StringAttr::get(val, op->getContext()));
+  op->setAttr(tagDict(), dict.getDictionary(op->getContext()));
+}
+
 bool hasUnitTag(mlir::Operation *op, llvm::StringRef name) {
   auto dict = op->getAttrOfType<DictionaryAttr>(tagDict());
   if (!dict) {
@@ -63,6 +71,15 @@ bool hasIntegerTag(mlir::Operation *op, llvm::StringRef name) {
   return static_cast<bool>(attr);
 }
 
+bool hasStringTag(mlir::Operation *op, llvm::StringRef name) {
+  auto dict = op->getAttrOfType<DictionaryAttr>(tagDict());
+  if (!dict) {
+    return false;
+  }
+  auto attr = dict.get(name).dyn_cast_or_null<StringAttr>();
+  return static_cast<bool>(attr);
+}
+
 int64_t getIntegerTag(mlir::Operation *op, llvm::StringRef name,
                       int64_t defaultVal) {
   auto dict = op->getAttrOfType<DictionaryAttr>(tagDict());
@@ -72,6 +89,19 @@ int64_t getIntegerTag(mlir::Operation *op, llvm::StringRef name,
   auto attr = dict.get(name).dyn_cast_or_null<IntegerAttr>();
   if (attr) {
     return attr.getInt();
+  }
+  return defaultVal;
+}
+
+llvm::StringRef getStringTag(mlir::Operation *op, llvm::StringRef name,
+                             llvm::StringRef defaultVal) {
+  auto dict = op->getAttrOfType<DictionaryAttr>(tagDict());
+  if (!dict) {
+    return defaultVal;
+  }
+  auto attr = dict.get(name).dyn_cast_or_null<StringAttr>();
+  if (attr) {
+    return attr.getValue();
   }
   return defaultVal;
 }

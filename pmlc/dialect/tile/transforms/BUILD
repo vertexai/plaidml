@@ -23,6 +23,7 @@ plaidml_cc_library(
         "pad_ranges.cc",
         "padding.cc",
         "pass_detail.h",
+        "reorder_inputs.cc",
         "split_main.cc",
     ],
     hdrs = [
@@ -35,6 +36,7 @@ plaidml_cc_library(
         ":gen-pass",
         "//pmlc/dialect/stdx/ir",
         "//pmlc/dialect/tile/ir",
+        "//pmlc/dialect/layer/ir",
         "//pmlc/util",
         "//pmlc/util/bilp",
         "//pmlc/util/math",

@@ -64,6 +64,7 @@ struct OclPipelineOptions : public PassPipelineOptions<OclPipelineOptions> {
 
 void pipelineBuilder(OpPassManager &pm,
                      const OclPipelineOptions &oclPipelineOptions) {
+  pm.addNestedPass<FuncOp>(tile::createReorderInputsPass());
   // Bound + pad initial tile code
   pm.addNestedPass<FuncOp>(layer::createInlineLayersPass());
   pm.addNestedPass<FuncOp>(tile::createComputeBoundsPass());
@@ -75,6 +76,7 @@ void pipelineBuilder(OpPassManager &pm,
 
   // Lower to PXA
   pm.addPass(conversion::tile_to_pxa::createLowerTileToPXAPass());
+  pm.addPass(createNormalizeMemRefsPass());
   pm.addNestedPass<FuncOp>(pxa::createAffineNormalizePass());
   pm.addPass(createCanonicalizerPass());
   pm.addPass(createCSEPass());

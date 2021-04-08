@@ -36,6 +36,11 @@ def PadConstraints : FunctionPass<"tile-pad-constraints"> {
   let constructor = "pmlc::dialect::tile::createPadConstraintsPass()";
 }
 
+def ReorderInputs : FunctionPass<"tile-reorder-inputs"> {
+  let summary = "Reorder Inputs";
+  let constructor = "pmlc::dialect::tile::createReorderInputsPass()";
+}
+
 def SplitMain :  Pass<"tile-split-main", "mlir::ModuleOp"> {
   let summary = "Split main into init/main/fini";
   let constructor = "pmlc::dialect::tile::createSplitMainPass()";

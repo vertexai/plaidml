@@ -13,6 +13,7 @@
 #include "mlir/IR/BuiltinTypes.h"
 #include "mlir/IR/OperationSupport.h"
 
+#include "pmlc/util/layout.h"
 #include "pmlc/util/logging.h"
 
 namespace pmlc::util {
@@ -62,6 +63,9 @@ struct DiagnosticCounter {
   size_t counter;
   size_t threshold;
 };
+
+mlir::AffineMap updateMemRefWithLayoutMap(mlir::MLIRContext *context,
+                                          int64_t rank, TensorLayout layout);
 
 } // namespace pmlc::util
 
