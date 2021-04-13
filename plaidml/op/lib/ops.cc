@@ -922,7 +922,7 @@ Value convolution(const Value& value) {
 
   // Construct a string to log the arguments if something throws
   std::stringstream args_log;
-  if (VLOG_IS_ON(1)) {
+  if (VLOG_IS_ON(0)) {
     args_log << "  Input Tensor: " << I_or_O << "\n";
     args_log << "  Filter Tensor: " << F_or_O << "\n";
     args_log << "  Strides: " << std::to_string(strides) << "\n";
@@ -941,7 +941,7 @@ Value convolution(const Value& value) {
     args_log << "  Derivative Mode: " << deriv_mode << "\n";
     args_log << "  Result Shape (for transposed/differentiated convs): " << std::to_string(result_shape);
   }
-  IVLOG(3, "Requesting convolution with args:\n" << args_log.str());
+  IVLOG(0, "Requesting convolution with args:\n" << args_log.str());
 
   Tensor I;  // Inputs (i.e. Data) tensor
   Tensor F;  // Filters (i.e. Weights i.e. Kernel) tensor

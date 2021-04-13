@@ -481,21 +481,21 @@ Tensor Dot(Tensor X, Tensor Y) {
 // }
 
 
-TEST_F(CppEdsl, CastF16_F32) {
-  const int64_t M = 16;
-  const int64_t N = 32;
-  const int64_t K = 16;
+// TEST_F(CppEdsl, CastF16_F32) {
+//   const int64_t M = 16;
+//   const int64_t N = 32;
+//   const int64_t K = 16;
 
-  Tensor A = Placeholder(DType::FLOAT16, {M, K});
-  Tensor B = Placeholder(DType::FLOAT16, {K, N});
+//   Tensor A = Placeholder(DType::FLOAT16, {M, K});
+//   Tensor B = Placeholder(DType::FLOAT16, {K, N});
 
-  Tensor A_f32 = cast(A, DType::FLOAT32);
-  Tensor B_f32 = cast(B, DType::FLOAT32);
+//   Tensor A_f32 = cast(A, DType::FLOAT32);
+//   Tensor B_f32 = cast(B, DType::FLOAT32);
 
-  auto program = makeProgram("dot_f16_acc_f32", {A, B}, {A_f32, B_f32});
+//   auto program = makeProgram("dot_f16_acc_f32", {A, B}, {A_f32, B_f32});
 
-  runProgram(program);
-}
+//   runProgram(program);
+// }
 
 // TEST_F(CppEdsl, DotF16_AccF32) {
 //   const int64_t M = 8;
@@ -679,20 +679,20 @@ TEST_F(CppEdsl, CastF16_F32) {
 //   runProgram(program);
 // }
 
-// Tensor Convolution2(Tensor I, Tensor K, const std::string& I_layout = "NHWC", const std::string& K_layout = "HWCK") {
-//   TensorLens I_lens(I_layout, "NHWC");
-//   TensorLens K_lens(K_layout, "HWCK");
-//   I = I.use(I_lens);
-//   K = K.use(K_lens);
-//   TensorDim CI, CO, K0, K1, N, X0, X1;
-//   TensorIndex n, x0, x1, co, ci, k0, k1;
-//   I.bind_dims(N, X0, X1, CI);
-//   K.bind_dims(K0, K1, CI, CO);
-//   return Contraction(I_lens)
-//       .outShape(N, X0, X1, CO)
-//       .outAccess(n, x0, x1, co)
-//       .sum(I(n, x0 + k0 - (K0 / 2), x1 + k1 - (K1 / 2), ci) * K(k0, k1, ci, co));
-// }
+Tensor Convolution2(Tensor I, Tensor K, const std::string& I_layout = "NHWC", const std::string& K_layout = "HWCK") {
+  TensorLens I_lens(I_layout, "NHWC");
+  TensorLens K_lens(K_layout, "HWCK");
+  I = I.use(I_lens);
+  K = K.use(K_lens);
+  TensorDim CI, CO, K0, K1, N, X0, X1;
+  TensorIndex n, x0, x1, co, ci, k0, k1;
+  I.bind_dims(N, X0, X1, CI);
+  K.bind_dims(K0, K1, CI, CO);
+  return Contraction(I_lens)
+      .outShape(N, X0, X1, CO)
+      .outAccess(n, x0, x1, co)
+      .sum(I(n, x0 + k0 - (K0 / 2), x1 + k1 - (K1 / 2), ci) * K(k0, k1, ci, co));
+}
 
 // TEST_F(CppEdsl, Convolution) {
 //   auto I = Placeholder(DType::FLOAT32, {1, 56, 56, 64});
