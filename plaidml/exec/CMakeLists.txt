@@ -1,3 +1,5 @@
+add_subdirectory(tests)
+
 set(_SRCS ffi.cc)
 set(_HDRS
   exec.h
@@ -28,4 +30,10 @@ pml_cc_library(
     pmlc::compiler
     pmlc::rt
     pmlc::util
+)
+
+pml_py_library(
+  NAME py
+  SRCS
+    __init__.py
 )

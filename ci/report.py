@@ -1,6 +1,3 @@
-#!/usr/bin/env python3
-
-import argparse
 import base64
 import csv
 import json
@@ -10,14 +7,13 @@ import subprocess
 import sys
 
 import pystache
+import util
 import yaml
-
-import ci.util
 from asq.initiators import query
 from asq.record import new
 
 DEFAULT_BUILD_URL = 'https://buildkite.com/plaidml'
-PLAN_PATH = pathlib.Path('../com_intel_plaidml/ci/plan.yml')
+PLAN_PATH = pathlib.Path('ci/plan.yml')
 
 
 def printf(*args, **kwargs):
@@ -35,7 +31,7 @@ def collect_results(root, pipeline):
         plan = yaml.safe_load(file_)
     gpu_flops = plan['CONST']['gpu_flops']
     baseline_name = plan['CONST']['efficiency_baseline']
-    for info in ci.util.iterate_tests(plan, pipeline):
+    for info in util.iterate_tests(plan, pipeline):
         if info.platform_name == baseline_name:
             continue
         path = info.path(root) / 'report.json'
@@ -315,14 +311,8 @@ def buildkite_annotate(root, style, html):
     proc.communicate(html.encode())
 
 
-def main():
+def run(args, remainder):
     printf('--- :bar_chart: Analyzing test results')
-
-    parser = argparse.ArgumentParser()
-    parser.add_argument('root', type=pathlib.Path)
-    parser.add_argument('--pipeline', default='plaidml')
-    parser.add_argument('--annotate', action='store_true')
-    args = parser.parse_args()
 
     test_dir = args.root / 'test'
     report_dir = args.root / 'report'
@@ -375,9 +365,5 @@ def main():
     html = pystache.render(load_template('annotate.html'), context)
     write_file(report_dir / 'annotate.html', html)
 
-    if args.annotate:
+    if not args.local:
         buildkite_annotate(args.root, style, html)
-
-
-if __name__ == '__main__':
-    main()

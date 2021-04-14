@@ -29,3 +29,5 @@ CppEdsl.InterpolatedGatherCubicDouble
 CppEdsl.InterpolatedGatherCubicHalf
 CppEdsl.InterpolatedGatherMultiDIndices
 CppEdsl.LarsMomentum4d
+CppEdsl.ScatterDup1D
+CppEdsl.ScatterDup3D

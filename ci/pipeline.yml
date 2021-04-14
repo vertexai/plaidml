@@ -12,42 +12,15 @@ steps:
     agents:
       PLATFORM: '{{name}}'
     artifact_paths:
-      {{#artifacts}}
-      - "tmp/build/**/*"
-      {{/artifacts}}
-      - "bazel-testlogs/**/test.log"
+      - "logs/*.log"
 {{/variants}}
   
-  - label: ':hammer_and_wrench: :linux: :beer:'
-    command: |
-      echo --- :building_construction: configuration
-      python configure --ci --temp=/tmp/$${BUILDKITE_AGENT_NAME}/plaidml
-
-      echo --- :hammer_and_wrench: ninja
-      ninja -C build-x86_64/Release
-
-      echo --- :hammer_and_wrench: ninja check-smoke
-      ninja -C build-x86_64/Release check-smoke
-
-      echo --- :hammer_and_wrench: devkit packaging
-      ninja -C build-x86_64/Release package
-
-      echo --- Test devkit
-      DEVKIT_DIR="build-x86_64/Release/_CPack_Packages/Linux/TGZ/PlaidML-1.0.0-Linux/devkit"
-      cmake -S $${DEVKIT_DIR} -B $${DEVKIT_DIR}/build -G Ninja
-      ninja -C $${DEVKIT_DIR}/build
-      $${DEVKIT_DIR}/build/edsl_test
-
-    key: linux_x86_64_cmake
-    agents:
-      PLATFORM: linux_x86_64
-
   - label: 'IRv10 models'
     trigger: irv10
     async: false
     build:
       message: "${BUILDKITE_MESSAGE}"
-      commit: "3089ca537808c6c227c98156932af2da0a7eb54a"
+      commit: 1eda26a86aafd5552989f757f48cac8c1083294e
       env:
         PLAIDML_COMMIT: "${BUILDKITE_COMMIT}"
         BUILDKITE_PULL_REQUEST: "${BUILDKITE_PULL_REQUEST}"
@@ -59,10 +32,10 @@ steps:
 
 
 {{#tests}}
-  - label: '{{emoji}}{{engine}}{{shard_emoji}}{{suite}}/{{workload}}/{{platform}} BATCH_SIZE={{batch_size}}'
+  - label: '{{emoji}}{{engine}}{{suite}}/{{workload}}/{{platform}} BATCH_SIZE={{batch_size}}'
     command: |
       {{python}} -m pip install pyyaml --user
-      {{python}} ci/buildkite.py test {{platform}} {{suite}} {{workload}} {{batch_size}} {{#shard}}--shard-count {{count}} --shard {{id}}{{/shard}}
+      {{python}} ci/buildkite.py test {{platform}} {{suite}} {{workload}} {{batch_size}}
     depends_on: {{variant}}
 
   {{#soft_fail}}

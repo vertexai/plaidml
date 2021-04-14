@@ -230,6 +230,27 @@ struct PxaVectorReduceOpConversion
   }
 };
 
+struct PxaStoreOpConversion : public OpConversionPattern<pxa::PxaStoreOp> {
+  using OpConversionPattern<pxa::PxaStoreOp>::OpConversionPattern;
+
+  LogicalResult
+  matchAndRewrite(pxa::PxaStoreOp op, ArrayRef<Value> operands,
+                  ConversionPatternRewriter &rewriter) const final {
+    auto memref = op.memref();
+    auto agg = op.agg();
+    if (agg == AtomicRMWKind::assign) {
+      rewriter.create<StoreOp>(op.getLoc(), op.value(), memref, op.indices());
+    } else {
+      auto resultType = memref.getType().cast<MemRefType>().getElementType();
+      rewriter.create<AtomicRMWOp>(op.getLoc(), resultType, agg, op.value(),
+                                   memref, op.indices());
+    }
+    op.replaceAllUsesWith(op.memref());
+    rewriter.eraseOp(op);
+    return success();
+  }
+};
+
 struct FuncOpConversion : public OpConversionPattern<FuncOp> {
   using OpConversionPattern<FuncOp>::OpConversionPattern;
 
@@ -334,6 +355,7 @@ void populatePXAToAffineConversionPatterns(OwningRewritePatternList &patterns,
       PxaReduceOpConversion,       //
       PxaVectorLoadOpConversion,   //
       PxaVectorReduceOpConversion, //
+      PxaStoreOpConversion,        //
       ReturnOpConversion>(ctx);
 }
 

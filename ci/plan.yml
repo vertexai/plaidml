@@ -60,23 +60,28 @@ PLATFORMS:
 VARIANTS:
   linux_x86_64:
     arch: manylinux1_x86_64
+    build_root: build-x86_64
+    build_type: Release
+    check: smoke
     system: Linux
     env:
       PLAIDML_DEVICE: llvm_cpu.0
       PLAIDML_TARGET: llvm_cpu
   linux_x86_64_dbg:
-    bazel_config: dbg
     arch: manylinux1_x86_64
+    build_root: build-x86_64
+    build_type: Debug
+    check: core
     system: Linux
     env:
       PLAIDML_DEVICE: llvm_cpu.0
       PLAIDML_TARGET: llvm_cpu
-  macos_x86_64:
-    arch: macosx_10_10_x86_64
-    system: Darwin
-    env:
-      PLAIDML_DEVICE: llvm_cpu.0
-      PLAIDML_TARGET: llvm_cpu
+  # macos_x86_64:
+  #   arch: macosx_10_10_x86_64
+  #   system: Darwin
+  #   env:
+  #     PLAIDML_DEVICE: llvm_cpu.0
+  #     PLAIDML_TARGET: llvm_cpu
   # Multiple "__const" sections causing assertion during JITLink
   # see: https://reviews.llvm.org/rGadf2098bd8193e3f9395512143071328e7bd024d
   # macos_x86_64_dbg:
@@ -108,9 +113,9 @@ SUITES:
         batch_sizes: [1]
     wheels:
       # NOTE: this list must be in least to most dependent order.
-      - plaidml-{version}-py2.py3-none-{arch}.whl
-      - plaidml_keras-{version}-py2.py3-none-any.whl
-      - plaidbench-{version}-py2.py3-none-any.whl
+      - plaidml-{version}-py3-none-{arch}.whl
+      - plaidml_keras-{version}-py3-none-any.whl
+      - plaidbench-{version}-py3-none-any.whl
     timeout: 5
     conda_env: ci/conda/tensorflow.yml
     compare: no
@@ -132,8 +137,6 @@ SUITES:
     platforms:
       pml-llvm-cpu:
         pipelines: [nightly, plaidml, ci]
-      pml-ocl-gen:
-        pipelines: [nightly, plaidml, ci]
     params:
       ci:
         batch_sizes: [0]
@@ -143,8 +146,8 @@ SUITES:
         batch_sizes: [0]
     wheels:
       # NOTE: this list must be in least to most dependent order.
-      - plaidml-{version}-py2.py3-none-{arch}.whl
-      - plaidml_keras-{version}-py2.py3-none-any.whl
+      - plaidml-{version}-py3-none-{arch}.whl
+      - plaidml_keras-{version}-py3-none-any.whl
     timeout: 30
     conda_env: ci/conda/tensorflow.yml
     compare: no
@@ -204,9 +207,9 @@ SUITES:
         batch_sizes: [1]
     wheels:
       # NOTE: this list must be in least to most dependent order.
-      - plaidml-{version}-py2.py3-none-{arch}.whl
-      - plaidml_keras-{version}-py2.py3-none-any.whl
-      - plaidbench-{version}-py2.py3-none-any.whl
+      - plaidml-{version}-py3-none-{arch}.whl
+      - plaidml_keras-{version}-py3-none-any.whl
+      - plaidbench-{version}-py3-none-any.whl
     timeout: 10
     conda_env: ci/conda/tensorflow.yml
     runner: plaidbench
@@ -328,9 +331,9 @@ SUITES:
         batch_sizes: [16, 32]
     wheels:
       # NOTE: this list must be in least to most dependent order.
-      - plaidml-{version}-py2.py3-none-{arch}.whl
-      - plaidml_keras-{version}-py2.py3-none-any.whl
-      - plaidbench-{version}-py2.py3-none-any.whl
+      - plaidml-{version}-py3-none-{arch}.whl
+      - plaidml_keras-{version}-py3-none-any.whl
+      - plaidbench-{version}-py3-none-any.whl
     timeout: 5
     conda_env: ci/conda/ml_gpu.yml
     cwd: plaidbench

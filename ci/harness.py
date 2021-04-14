@@ -7,23 +7,20 @@ import sys
 import tarfile
 from distutils.dir_util import copy_tree
 
-import yaml
-
 import analysis
 import util
+import yaml
 
 DEFAULT_BUILD_URL = 'https://buildkite.com/plaidml'
 
 
 def buildkite_metadata(key, default=None):
-    return os.getenv('BUILDKITE_AGENT_META_DATA_' + key, os.getenv(key, default))
+    return os.getenv(f'BUILDKITE_AGENT_META_DATA_{key}', os.getenv(key, default))
 
 
 def run(args, remainder):
     util.verbose = True
     util.printf('args:', args)
-    if args.shard_count:
-        util.printf('running shard:', args.shard)
 
     with open('ci/plan.yml') as fp:
         plan = yaml.safe_load(fp)
@@ -34,6 +31,9 @@ def run(args, remainder):
     variant_name = platform['variant']
     variant = plan['VARIANTS'][variant_name]
     arch = variant['arch']
+    build_root = variant.get('build_root')
+    build_type = variant.get('build_type')
+    build_dir = pathlib.Path(build_root) / build_type
 
     suites = plan['SUITES']
     suite = suites.get(args.suite)
@@ -53,33 +53,20 @@ def run(args, remainder):
         batch_size=args.batch_size,
         variant=variant,
         popt=popt,
-        shard_id=args.shard,
-        shards=args.shard_count,
     )
 
     root = pathlib.Path('tmp').resolve()
-    input = root / 'input'
     output_root = root / 'test'
     output = test_info.path(output_root)
 
-    shutil.rmtree(input, ignore_errors=True)
-    if args.local:
-        pkg_path = pathlib.Path('bazel-bin/pkg.tar.gz')
-        version = '0.0.0.dev0'
-    else:
-        archive_path = os.path.join('tmp', 'build', variant_name, 'pkg.tar.gz')
-        util.buildkite_download(archive_path, '.')
-        pkg_path = root / 'build' / variant_name / 'pkg.tar.gz'
-        version = args.version
-
-    util.printf('--- Extracting {} -> {}'.format(pkg_path, input))
-    with tarfile.open(str(pkg_path), 'r') as tar:
-        tar.extractall(input)
+    version = '1.0.0'  # TODO: support dynamic versions
+    if not args.local:
+        util.buildkite_download(build_dir / '*.whl', '.')
 
     shutil.rmtree(output_root, ignore_errors=True)
     output.mkdir(parents=True)
 
-    cwd = os.path.abspath(popt.get('cwd', '.'))
+    cwd = pathlib.Path(popt.get('cwd', '.')).resolve()
     spec = pathlib.Path(popt.get('conda_env'))
 
     util.printf('--- :snake: Creating conda env from {}'.format(spec))
@@ -96,7 +83,7 @@ def run(args, remainder):
 
     for whl in popt.get('wheels', []):
         whl_filename = whl.format(arch=arch, version=version)
-        whl_path = input / whl_filename
+        whl_path = build_dir / whl_filename
         conda_env.install(whl_path)
 
     if 'cuda' in args.platform:
@@ -109,7 +96,7 @@ def run(args, remainder):
     if target != None:
         env['PLAIDML_TARGET'] = target
 
-    util.printf('--- :bazel: Running test {suite}/{workload} on {platform}'.format(
+    util.printf('--- Running test {suite}/{workload} on {platform}'.format(
         suite=args.suite,
         workload=args.workload,
         platform=args.platform,
@@ -118,10 +105,6 @@ def run(args, remainder):
     cmd_args = platform_cfg.get('prepend_args', []) + popt.get('prepend_args', [])
     cmd_args += platform_cfg.get('args', []) + popt.get('args', [])
     cmd_args += platform_cfg.get('append_args', []) + popt.get('append_args', [])
-
-    if args.shard_count:
-        cmd_args += ['--shard', str(args.shard)]
-        cmd_args += ['--shard-count', str(args.shard_count)]
 
     ctx = dict(
         results=output,
@@ -135,7 +118,7 @@ def run(args, remainder):
         except ValueError:
             pass
 
-    runner = shutil.which(popt.get('runner'), path=os.pathsep.join([cwd, env['PATH']]))
+    runner = shutil.which(popt.get('runner'), path=os.pathsep.join([str(cwd), env['PATH']]))
     cmd = [runner] + cmd_args
     retcode = util.call(cmd, cwd=cwd, env=env)
 

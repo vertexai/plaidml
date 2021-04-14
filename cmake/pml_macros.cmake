@@ -19,33 +19,6 @@ else()
 endif()
 
 #-------------------------------------------------------------------------------
-# General utilities
-#-------------------------------------------------------------------------------
-
-# pml_to_bool
-#
-# Sets `variable` to `ON` if `value` is true and `OFF` otherwise.
-function(pml_to_bool VARIABLE VALUE)
-  if(VALUE)
-    set(${VARIABLE} "ON" PARENT_SCOPE)
-  else()
-    set(${VARIABLE} "OFF" PARENT_SCOPE)
-  endif()
-endfunction()
-
-# pml_append_list_to_string
-#
-# Joins ${ARGN} together as a string separated by " " and appends it to
-# ${VARIABLE}.
-function(pml_append_list_to_string VARIABLE)
-  if(NOT "${ARGN}" STREQUAL "")
-    string(JOIN " " _ARGN_STR ${ARGN})
-    set(${VARIABLE} "${${VARIABLE}} ${_ARGN_STR}" PARENT_SCOPE)
-  endif()
-endfunction()
-
-
-#-------------------------------------------------------------------------------
 # Packages and Paths
 #-------------------------------------------------------------------------------
 
@@ -252,33 +225,5 @@ function(pml_add_executable_dependencies EXECUTABLE DEPENDENCY)
     add_dependencies(${EXECUTABLE} pml_host_${DEPENDENCY})
   else()
     add_dependencies(${EXECUTABLE} ${DEPENDENCY})
-  endif()
-endfunction()
-
-#-------------------------------------------------------------------------------
-# Tests
-#-------------------------------------------------------------------------------
-
-# pml_add_test_environment_properties
-#
-# Adds test environment variable properties based on the current build options.
-#
-# Parameters:
-# TEST_NAME: the test name, e.g. pml/base:ref_ptr_test
-function(pml_add_test_environment_properties TEST_NAME)
-  # PML_*_DISABLE environment variables may used to skip test cases which
-  # require both a compiler target backend and compatible runtime HAL driver.
-  #
-  # These variables may be set by the test environment, typically as a property
-  # of some continuous execution test runner or by an individual developer, or
-  # here by the build system.
-  #
-  # Tests which only depend on a compiler target backend or a runtime HAL
-  # driver, but not both, should generally use a different method of filtering.
-  if(NOT ${PML_TARGET_BACKEND_VULKAN-SPIRV} OR NOT ${PML_HAL_DRIVER_VULKAN})
-    set_property(TEST ${TEST_NAME} APPEND PROPERTY ENVIRONMENT "PML_VULKAN_DISABLE=1")
-  endif()
-  if(NOT ${PML_TARGET_BACKEND_LLVM-IR} OR NOT ${PML_HAL_DRIVER_LLVM})
-    set_property(TEST ${TEST_NAME} APPEND PROPERTY ENVIRONMENT "PML_LLVMJIT_DISABLE=1")
   endif()
 endfunction()

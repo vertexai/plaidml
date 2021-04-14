@@ -479,7 +479,7 @@ class TestBackendOps(unittest.TestCase):
         [m(2, 4, 5), m(2, 5, 1), None],
     ],
             skip_tensorflow=not bool(os.getenv('PLAIDML_BATCHDOT_TF_BEHAVIOR')),
-            skip_theano=bool(os.getenv('PLAIDML_BATCHDOT_TF_BEHAVIOR')))
+            skip_theano=True)
     def testBatchDot(self, b, x, y, ax):
         if ax is None:
             return [b.batch_dot(x, y)]

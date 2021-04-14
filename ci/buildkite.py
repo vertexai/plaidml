@@ -11,24 +11,30 @@ import sys
 import tarfile
 from pathlib import Path
 
+import harness
+import pystache
+import report
 import util
+import yaml
 
 # Artifacts are stored with buildkite using the following scheme:
 #
 # $ROOT/tmp/output/$SUITE/$WORKLOAD/$PLATFORM/{params}/[result.json, result.npy]
 
-OUTPUT_ROOT = {
-    'Darwin': '/usr/local/var/buildkite-agent/bazel',
-    'Linux': '/var/lib/buildkite-agent/bazel',
-    'Windows': 'C:\\buildkite-agent\\bazel',
-}
+DEFAULT_PIPELINE = 'plaidml'
+
+PIPELINE = os.getenv('PIPELINE', os.getenv('BUILDKITE_PIPELINE_NAME', DEFAULT_PIPELINE))
+BUILD_ID = os.getenv('BUILDKITE_BUILD_NUMBER', '0')
+
+cli = argparse.ArgumentParser()
+cli.add_argument('--pipeline', default=PIPELINE)
+subparsers = cli.add_subparsers(dest="subcommand")
 
 
 def load_template(name):
-    this_dir = os.path.dirname(__file__)
-    template_path = os.path.join(this_dir, name)
-    with open(template_path, 'r') as file_:
-        return file_.read()
+    this_dir = Path(__file__).parent
+    template_path = this_dir / name
+    return template_path.read_text()
 
 
 def get_emoji(variant):
@@ -65,32 +71,14 @@ def get_engine(pkey):
     return ':small_blue_diamond:'
 
 
-def get_shard_emoji(shard):
-    numbers = [
-        ':zero:',
-        ':one:',
-        ':two:',
-        ':three:',
-        ':four:',
-        ':five:',
-        ':six:',
-        ':seven:',
-        ':eight:',
-        ':nine:',
-    ]
-    return numbers[shard]
-
-
 def get_python(variant):
     if variant == 'windows_x86_64':
         return 'python'
     return 'python3'
 
 
+@util.subcommand(subparsers, util.argument('--count', action='store_true'))
 def cmd_pipeline(args, remainder):
-    import pystache
-    import yaml
-
     with open('ci/plan.yml') as file_:
         plan = yaml.safe_load(file_)
 
@@ -106,12 +94,6 @@ def cmd_pipeline(args, remainder):
 
     tests = []
     for test in util.iterate_tests(plan, args.pipeline):
-        if test.shards > 1:
-            shard = dict(id=test.shard_id, count=test.shards)
-            shard_emoji = get_shard_emoji(test.shard_id)
-        else:
-            shard = None
-            shard_emoji = ''
         tests.append(
             dict(
                 suite=test.suite_name,
@@ -123,8 +105,6 @@ def cmd_pipeline(args, remainder):
                 retry=test.retry,
                 soft_fail=test.soft_fail,
                 python=get_python(test.variant),
-                shard=shard,
-                shard_emoji=shard_emoji,
                 emoji=get_emoji(test.variant),
                 engine=get_engine(test.platform_name),
             ))
@@ -139,18 +119,8 @@ def cmd_pipeline(args, remainder):
         util.printf(yml)
 
 
-def output_base():
-    root = Path(OUTPUT_ROOT.get(platform.system()))
-    agent = os.getenv('BUILDKITE_AGENT_NAME', 'agent')
-    pipeline = os.getenv('BUILDKITE_PIPELINE_SLUG', 'pipeline')
-    branch = os.getenv('BUILDKITE_PULL_REQUEST_BASE_BRANCH', '')
-    if branch == '':
-        branch = os.getenv('BUILDKITE_BRANCH', 'branch')
-    return root / agent / pipeline / branch
-
-
+@util.subcommand(subparsers, util.argument('variant'))
 def cmd_build(args, remainder):
-    import yaml
     with open('ci/plan.yml') as file_:
         plan = yaml.safe_load(file_)
 
@@ -159,75 +129,65 @@ def cmd_build(args, remainder):
     for key, value in variant.get('env', {}).items():
         env[key] = str(value)
 
-    explain_log = 'explain.log'
-    profile_json = 'profile.json.gz'
-    bazel_config = variant.get('bazel_config')
-    startup_args = ['--output_base={}'.format(output_base())]
+    build_root = variant.get('build_root', 'build-x86_64')
+    build_type = variant.get('build_type', 'Release')
+    check = variant.get('check', 'smoke')
+    system = variant.get('system', 'Linux')
 
-    common_args = []
-    if bazel_config:
-        common_args += ['--config={}'.format(bazel_config)]
-    common_args += ['--define=version={}'.format(args.version)]
-    common_args += ['--experimental_generate_json_trace_profile']
-    common_args += ['--experimental_json_trace_compression']
-    common_args += ['--experimental_profile_cpu_usage']
-    common_args += ['--explain={}'.format(explain_log)]
-    common_args += ['--profile={}'.format(profile_json)]
-    common_args += ['--verbose_failures']
-    common_args += ['--verbose_explanations']
+    temp_dir = Path('/tmp') / os.getenv('BUILDKITE_AGENT_NAME')
+    build_dir = Path(build_root) / build_type
+    logs_dir = Path('logs').resolve()
+    logs_dir.mkdir(parents=True, exist_ok=True)
 
-    util.printf('--- :bazel: Running Build...')
-    if platform.system() == 'Windows':
-        util.check_call(['git', 'config', 'core.symlinks', 'true'])
-        cenv = util.CondaEnv(Path('.cenv'))
-        cenv.create('environment-windows.yml')
-        env.update(cenv.env())
-        for path in Path('.').glob('bazel-*'):
-            path.unlink()
-    util.check_call(['bazelisk'] + startup_args + ['test', '...'] + common_args, env=env)
+    util.printf('--- :building_construction: configure')
+    configure_log = logs_dir / 'configure.log'
+    with configure_log.open('wb') as fp:
+        util.check_call(
+            ['python', 'configure', '--ci', f'--temp={temp_dir}', f'--type={build_type}'],
+            env=env,
+            stdout=fp,
+            stderr=subprocess.STDOUT)
 
-    util.printf('--- :buildkite: Uploading artifacts...')
-    util.buildkite_upload(explain_log)
-    util.buildkite_upload(profile_json)
+    util.printf('--- :hammer_and_wrench: ninja')
+    util.check_call(['ninja', '-C', build_dir], env=env)
 
-    shutil.rmtree('tmp', ignore_errors=True)
-    tarball = os.path.join('bazel-bin', 'pkg.tar.gz')
-    with tarfile.open(tarball, "r") as tar:
-        wheels = []
-        for item in tar.getmembers():
-            if item.name.endswith('.whl'):
-                wheels.append(item)
-        tar.extractall('tmp', members=wheels)
+    util.printf('--- :hammer_and_wrench: ninja package')
+    util.check_call(['ninja', '-C', build_dir, 'package'], env=env)
+
+    util.printf(f'--- :hammer_and_wrench: ninja check-{check}')
+    check_log = logs_dir / f'check-{check}.log'
+    with check_log.open('wb') as fp:
+        util.check_call(['ninja', '-C', build_dir, f'check-{check}'],
+                        env=env,
+                        stdout=fp,
+                        stderr=subprocess.STDOUT)
+
+    util.printf('--- Test devkit')
+    devkit_dir = build_dir / '_CPack_Packages' / system / 'TGZ' / f'PlaidML-1.0.0-{system}' / 'devkit'
+    devkit_build_dir = devkit_dir / 'build'
+    cmd = ['cmake']
+    cmd += ['-S', devkit_dir]
+    cmd += ['-B', devkit_build_dir]
+    cmd += ['-G', 'Ninja']
+    util.check_call(cmd, env=env)
+    util.check_call(['ninja', '-C', devkit_build_dir], env=env)
+    util.check_call([devkit_build_dir / 'edsl_test'], env=env)
+
     if 'dbg' not in args.variant:
-        util.buildkite_upload('*.whl', cwd='tmp')
-
-    variant_dir = os.path.join('tmp', 'build', args.variant)
-    os.makedirs(variant_dir)
-    shutil.copy(tarball, variant_dir)
+        util.buildkite_upload(build_dir / '*.whl')
+        util.buildkite_upload(build_dir / '*.tar.gz')
 
 
+@util.subcommand(
+    subparsers,
+    util.argument('platform'),
+    util.argument('suite'),
+    util.argument('workload'),
+    util.argument('batch_size'),
+    util.argument('--local', action='store_true'),
+)
 def cmd_test(args, remainder):
-    import harness
     harness.run(args, remainder)
-
-
-def make_all_wheels(workdir):
-    util.printf('clearing workdir: {}'.format(workdir))
-    shutil.rmtree(workdir, ignore_errors=True)
-    workdir.mkdir(parents=True, exist_ok=True)
-
-    util.printf('downloading wheels...')
-    util.buildkite_download('*.whl', str(workdir), cwd=workdir)
-
-    tarball = 'all_wheels.tar.gz'
-    util.printf('creating {}'.format(tarball))
-    with tarfile.open(tarball, "w:gz") as tar:
-        for whl in workdir.glob('*.whl'):
-            util.printf('adding {}'.format(whl))
-            tar.add(whl, arcname=whl.name)
-
-    util.printf('uploading {}'.format(tarball))
-    util.buildkite_upload(tarball)
 
 
 def download_test_artifacts(pattern):
@@ -240,81 +200,23 @@ def download_test_artifacts(pattern):
         src.rename(tgt)
 
 
+@util.subcommand(
+    subparsers,
+    util.argument('--local', action='store_true'),
+)
 def cmd_report(args, remainder):
-    workdir = Path('tmp').resolve()
-    make_all_wheels(workdir)
-    download_test_artifacts('tmp/test/**/*')
-    startup_args = ['--output_base={}'.format(output_base())]
-    cmd = ['bazelisk'] + startup_args + ['run', '//ci:report']
-    cmd += ['--']
-    cmd += ['--pipeline', args.pipeline]
-    cmd += ['--annotate']
-    cmd += [str(workdir)]
-    cmd += remainder
-    util.check_call(cmd, stderr=subprocess.DEVNULL)
-
-
-def make_cmd_build(parent):
-    parser = parent.add_parser('build')
-    parser.add_argument('variant')
-    parser.set_defaults(func=cmd_build)
-
-
-def make_cmd_test(parent):
-    parser = parent.add_parser('test')
-    parser.add_argument('platform')
-    parser.add_argument('suite')
-    parser.add_argument('workload')
-    parser.add_argument('batch_size')
-    parser.add_argument('--local', action='store_true')
-    parser.add_argument('--shard', type=int)
-    parser.add_argument('--shard-count', type=int, default=0)
-    parser.set_defaults(func=cmd_test)
-
-
-def make_cmd_report(parent):
-    parser = parent.add_parser('report')
-    parser.set_defaults(func=cmd_report)
-
-
-def make_cmd_pipeline(parent):
-    parser = parent.add_parser('pipeline')
-    parser.add_argument('--count', action='store_true')
-    parser.set_defaults(func=cmd_pipeline)
+    args.root = Path('tmp').resolve()
+    if not args.local:
+        download_test_artifacts('tmp/test/**/*')
+    report.run(args, remainder)
 
 
 def main():
-    pipeline = os.getenv('PIPELINE', 'plaidml')
-    branch = os.getenv('BUILDKITE_BRANCH', 'undefined')
-    build_id = os.getenv('BUILDKITE_BUILD_NUMBER', '0')
-    with open('VERSION', 'r') as verf:
-        version = verf.readline().strip()
-    default_version = os.getenv('VAI_VERSION', '{}+{}.dev{}'.format(version, pipeline, build_id))
-
-    main_parser = argparse.ArgumentParser()
-    main_parser.add_argument('--pipeline', default=pipeline)
-    main_parser.add_argument('--branch', default=branch)
-    main_parser.add_argument('--build_id', default=build_id)
-    main_parser.add_argument('--version', default=default_version)
-
-    sub_parsers = main_parser.add_subparsers()
-
-    make_cmd_pipeline(sub_parsers)
-    make_cmd_build(sub_parsers)
-    make_cmd_test(sub_parsers)
-    make_cmd_report(sub_parsers)
-
-    args, remainder = main_parser.parse_known_args()
-    if 'func' not in args:
-        main_parser.print_help()
-        return
-
-    if platform.system() == 'Linux' or platform.system() == 'Darwin':
-        path = os.getenv('PATH').split(os.pathsep)
-        path.insert(0, '/usr/local/miniconda3/bin')
-        os.environ.update({'PATH': os.pathsep.join(path)})
-
-    args.func(args, remainder)
+    args, remainder = cli.parse_known_args()
+    if args.subcommand:
+        args.func(args, remainder)
+    else:
+        cli.print_help()
 
 
 if __name__ == '__main__':

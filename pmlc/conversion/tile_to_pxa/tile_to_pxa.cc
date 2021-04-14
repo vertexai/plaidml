@@ -1723,24 +1723,22 @@ struct ScatterOpConversion : public OpConversionPattern<tile::ScatterOp> {
       llvm_unreachable("unrecognized scatter mode");
     }
 
+    Value storeResult;
     if (op.mode() == ScatterMode::normal) {
-      auto loadVal = rewriter.create<mlir::LoadOp>(loc, resultMemRef, dstOps);
-      Value sumVal;
       if (srcVal.getType().isa<FloatType>()) {
-        sumVal = rewriter.create<mlir::AddFOp>(loc, srcVal, loadVal);
-      } else if (resultType.isa<IntegerType>()) {
-        sumVal = rewriter.create<mlir::AddIOp>(loc, srcVal, loadVal);
+        storeResult = rewriter.create<pxa::PxaStoreOp>(
+            loc, AtomicRMWKind::addf, srcVal, copyLoop.getResult(0), dstOps);
+      } else if (srcVal.getType().isa<IntegerType>()) {
+        storeResult = rewriter.create<pxa::PxaStoreOp>(
+            loc, AtomicRMWKind::addi, srcVal, copyLoop.getResult(0), dstOps);
       } else {
         llvm_unreachable("Unsupported datatype in scatter.");
       }
-      // Write the summed value to the destination
-      rewriter.create<mlir::StoreOp>(loc, sumVal, resultMemRef, dstOps);
     } else {
-      // Write the updates value to the destination
-      rewriter.create<mlir::StoreOp>(loc, srcVal, resultMemRef, dstOps);
+      storeResult = rewriter.create<pxa::PxaStoreOp>(
+          loc, AtomicRMWKind::assign, srcVal, copyLoop.getResult(0), dstOps);
     }
-
-    rewriter.create<AffineYieldOp>(loc, ArrayRef<Value>{resultMemRef});
+    rewriter.create<AffineYieldOp>(loc, ArrayRef<Value>{storeResult});
     rewriter.replaceOp(op, loop.getResult(0));
     return success();
   }

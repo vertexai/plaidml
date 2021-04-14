@@ -33,4 +33,12 @@ pml_cc_library(
     pmlc::util
 )
 
+pml_py_library(
+  NAME py
+  SRCS
+    __init__.py
+    settings.py
+)
+
 configure_file(version.in.cc version.cc)
+configure_file(_version.in.py _version.py)

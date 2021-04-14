@@ -11,3 +11,5 @@ CppEdsl.DotF16_AccF32
 CppEdsl.Erf
 CppEdsl.HigherPrecisionConstants
 CppEdsl.InterpolatedGatherCubicHalf
+CppEdsl.ScatterDup1D
+CppEdsl.ScatterDup3D

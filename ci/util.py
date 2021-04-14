@@ -48,6 +48,44 @@ def buildkite_download(pattern, destination, check=True, **kwargs):
         call(cmd, **kwargs)
 
 
+def argument(*name_or_flags, **kwargs):
+    """Convenience function to properly format arguments to pass to the
+    subcommand decorator.
+    """
+    return name_or_flags, kwargs
+
+
+# This comes from: https://gist.github.com/mivade/384c2c41c3a29c637cb6c603d4197f9f
+def subcommand(parent, *subparser_args):
+    """Decorator to define a new subcommand in a sanity-preserving way.
+    The function will be stored in the ``func`` variable when the parser
+    parses arguments so that it can be called directly like so::
+
+        args = cli.parse_args()
+        args.func(args)
+
+    Usage example::
+
+        @subcommand(argument("-d", help="Enable debug mode", action="store_true"))
+        def subcommand(args):
+            print(args)
+
+    Then on the command line::
+
+        $ python cli.py subcommand -d
+
+    """
+
+    def decorator(func):
+        name = func.__name__[len('cmd_'):]
+        parser = parent.add_parser(name, description=func.__doc__)
+        for args, kwargs in subparser_args:
+            parser.add_argument(*args, **kwargs)
+        parser.set_defaults(func=func)
+
+    return decorator
+
+
 class CondaEnv(object):
 
     def __init__(self, path):

@@ -8,8 +8,6 @@ import shutil
 import subprocess
 import sys
 
-BAZELRC = '.bazelrc.configure'
-
 
 def is_linux():
     return platform.system() == 'Linux'
@@ -49,9 +47,6 @@ class Configure:
         self.this_dir = pathlib.Path(__file__).absolute().parent
         self.cenv_dir = self.this_dir / '.cenv'
         print('conda found at: {}'.format(self.conda))
-
-        # reset custom config settings
-        open(BAZELRC, 'w').close()
 
     def is_activated(self):
         return os.getenv('CONDA_PREFIX') == str(self.cenv_dir)
@@ -118,16 +113,6 @@ class Configure:
             sys.exit(1)
         run([pre_commit, 'install'], check=True)
 
-    def configure_bazelisk(self):
-        bazelisk = shutil.which('bazelisk')
-        if not bazelisk:
-            print('Please install bazelisk from:')
-            print('https://github.com/bazelbuild/bazelisk')
-            sys.exit(1)
-        print()
-        print('bazelisk version')
-        run([bazelisk, 'version'], check=True)
-
     def configure_cmake(self, args):
         build_dir = pathlib.Path(f'build-{args.target}').resolve() / args.type
         openvino_dir = build_dir / '_deps/openvino-build'
@@ -184,9 +169,6 @@ class Configure:
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--ci', action='store_true', help='Enable CI mode')
-    parser.add_argument('--skip_bazelisk',
-                        action='store_true',
-                        help='Skip the bazelisk configuration step?')
     parser.add_argument('--skip_conda_env',
                         action='store_true',
                         help='Skip the conda environment creation step?')
@@ -223,15 +205,13 @@ def main():
         else:
             if not args.skip_precommit:
                 cfg.configure_precommit()
-            if not args.skip_bazelisk:
-                cfg.configure_bazelisk()
             cfg.configure_cmake(args)
 
         print()
         print("Your build is configured.")
         print("Use the following to run all unit tests:")
         print()
-        print("bazelisk test //...")
+        print("ninja -C build-x86_64/Release check-smoke")
         print()
 
 

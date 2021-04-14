@@ -1,11 +1,8 @@
-/.bazelrc.configure
-/.bazelrc.user
 /.cenv
 /.git
 /.tools
 /.vs
 /.vscode
-/bazel-*
 /build-*
 /docs/_build
 /docs/venv

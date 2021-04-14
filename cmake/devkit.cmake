@@ -13,13 +13,6 @@ install(TARGETS
   COMPONENT devkit
 )
 
-install(TARGETS
-    omp
-    mlir_runner_utils
-  DESTINATION "lib"
-  COMPONENT devkit
-)
-
 write_basic_package_version_file(
   "${PROJECT_NAME}ConfigVersion.cmake"
   VERSION ${CPACK_PACKAGE_VERSION}

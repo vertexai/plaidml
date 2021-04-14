@@ -40,8 +40,6 @@ endif()
 # Project component configuration
 # -------------------------------------------------------------------------------
 option(PML_BUILD_TESTS "Builds PML unit tests" ON)
-option(PML_ENABLE_OPENCL "Enable OpenCL support" ON)
-option(PML_ENABLE_VULKAN "Enable Vulkan support" ON)
 option(PML_ENABLE_DEVKIT "Enable the devkit" ON)
 option(PML_INCLUDE_LLVM "Fetch and include the llvm-project" ON)
 option(PML_OPENVINO_BRIDGE "Enable the OpenVINO plugin" ON)
@@ -72,15 +70,6 @@ include(half)
 if(PML_INCLUDE_LLVM)
   include(llvm-project)
 endif()
-if(PML_ENABLE_OPENCL)
-  include(opencl_headers)
-  include(opencl_hpp_headers)
-  include(opencl_icd_loader)
-endif()
-if(PML_ENABLE_VULKAN)
-  include(vulkan_headers)
-  include(volk)
-endif()
 include(xsmm)
 
 # -------------------------------------------------------------------------------
@@ -88,12 +77,16 @@ include(xsmm)
 # -------------------------------------------------------------------------------
 if(PML_BUILD_TESTS)
   enable_testing()
+  add_custom_target(check-core
+    COMMAND ${CMAKE_CTEST_COMMAND} -L core --output-on-failure
+    USES_TERMINAL
+  )
   add_custom_target(check-smoke
-    COMMAND ${CMAKE_CTEST_COMMAND} -L smoke
+    COMMAND ${CMAKE_CTEST_COMMAND} -L smoke --output-on-failure
     USES_TERMINAL
   )
   add_custom_target(check-test
-    COMMAND ${CMAKE_CTEST_COMMAND} -L test
+    COMMAND ${CMAKE_CTEST_COMMAND} -L test --output-on-failure
     USES_TERMINAL
   )
 endif()
@@ -108,6 +101,7 @@ include(pml_cc_binary)
 include(pml_cc_library)
 include(pml_cc_test)
 include(pml_lit_test)
+include(pml_python)
 include(pml_tblgen_library)
 include(pml_whole_archive_link)
 
@@ -137,6 +131,7 @@ set(CPACK_COMPONENTS_ALL
 include(CPack)
 
 
+add_subdirectory(plaidbench)
 add_subdirectory(plaidml)
 add_subdirectory(pmlc)
 add_subdirectory(docs)

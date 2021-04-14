@@ -1,5 +1,0 @@
-build-dbg/
-build-fast/
-build-opt/
-build-x86_64/
-vendor/openvino/

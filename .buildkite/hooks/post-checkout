@@ -2,10 +2,6 @@
 
 set -euo pipefail
 
-if [ "${BUILDKITE_STEP_KEY}" != "linux_x86_64_cmake" ]; then
-    exit 0
-fi
-
 echo "--- :snake: Providing conda and job environment"
 
 if [ ! -d ${CONDA_PREFIX} ]; then

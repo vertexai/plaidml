@@ -97,19 +97,12 @@ ENV/
 # mypy
 .mypy_cache/
 
-# bazel generates a group of directories for build products
-/bazel-*
-
 # macos
 .DS_Store
 *~
 
 # Visual Studio Code
 .vscode
-
-# .bazelrc files
-.bazelrc.configure
-.bazelrc.user
 
 /tmp
 /.cenv

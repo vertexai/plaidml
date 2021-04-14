@@ -31,3 +31,9 @@ pml_cc_library(
     pmlc::util
     LLVMSupport
 )
+
+pml_py_library(
+  NAME py
+  SRCS
+    __init__.py
+)

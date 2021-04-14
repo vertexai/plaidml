@@ -39,6 +39,13 @@ pml_cc_test(
     plaidml::testenv
     pmlc::testing
   CHECKS
+    core
     smoke
     test
+)
+
+pml_py_library(
+  NAME py
+  SRCS
+    __init__.py
 )
