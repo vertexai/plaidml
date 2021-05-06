@@ -11,3 +11,4 @@ dependencies:
       - six
       - tensorflow==1.15
       - theano==1.0.4
+      - h5py==2.10.0

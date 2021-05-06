@@ -5,3 +5,4 @@ dependencies:
   - pip=19
   - python=3.7
   - anaconda::tensorflow=1.15
+  - h5py=2.10.0
