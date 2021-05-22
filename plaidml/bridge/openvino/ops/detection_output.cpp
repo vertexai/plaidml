@@ -128,21 +128,22 @@ void registerDetectionOutput() {
 
     edsl::Tensor iou_threshold = cast(edsl::Tensor{nms_threshold}, DType::FLOAT32);
     edsl::Tensor score_threshold = cast(edsl::Tensor{confidence_threshold}, DType::FLOAT32);
-    std::vector<edsl::Tensor> result = op::nms(prior_boxes, nms_conf, iou_threshold, score_threshold, top_k)
-                                           .soft_nms_sigma(0.0f)
-                                           .center_point_box(center_decode_mode)
-                                           .sort_result_descending(false)
-                                           .box_output_type(DType::INT32)
-                                           .boxes_decode_mode(op::BoxesDecodeMode::SSD)
-                                           .clip_before_nms(clip_before_nms)
-                                           .clip_after_nms(clip_after_nms)
-                                           .ssd_input_height(i_h)
-                                           .ssd_input_width(i_w)
-                                           .ssd_variances(prior_variances)
-                                           .ssd_location(location)
-                                           .ssd_with_arm_loc(with_add_pred)
-                                           .ssd_arm_location(arm_loc)
-                                           .build();
+    std::vector<edsl::Tensor> result =
+        op::nms(prior_boxes, cast(nms_conf, DType::FLOAT32), iou_threshold, score_threshold, top_k)
+            .soft_nms_sigma(0.0f)
+            .center_point_box(center_decode_mode)
+            .sort_result_descending(false)
+            .box_output_type(DType::INT32)
+            .boxes_decode_mode(op::BoxesDecodeMode::SSD)
+            .clip_before_nms(clip_before_nms)
+            .clip_after_nms(clip_after_nms)
+            .ssd_input_height(i_h)
+            .ssd_input_width(i_w)
+            .ssd_variances(prior_variances)
+            .ssd_location(location)
+            .ssd_with_arm_loc(with_add_pred)
+            .ssd_arm_location(arm_loc)
+            .build();
     edsl::Tensor selected_indices = result[0];
     auto selected_indices_shape = selected_indices.compute_shape().sizes();
     edsl::Tensor selected_scores = result[1];
