@@ -73,7 +73,7 @@ class Demo:
             "https://github.com/plaidml/depot/raw/master/datasets/cats_and_dogs_filtered.zip",
             fname="cats_and_dogs_filtered.zip",
             extract=True)
-        base_dir, _ = os.path.splitext(zip_file)
+        base_dir = os.path.dirname(zip_file)
         train_dir = os.path.join(base_dir, 'train')
         validation_dir = os.path.join(base_dir, 'validation')
         self.test_dir = os.path.join(base_dir, 'test')
