@@ -2005,6 +2005,186 @@ TEST_F(CppEdsl, Lens) {
   checkExact(program, {input}, {expected});
 }
 
+TEST_F(CppEdsl, Loop) {
+  auto A = Placeholder(DType::INT32, {4});
+  Tensor O = PLAIDML_EDSL_LOOP(5, A)(Tensor arg) {
+    arg = arg + 1;
+    return arg;
+  };
+  auto program = makeProgram("loop", {A}, {O});
+  // clang-format off
+  // CHECK-LABEL: CppEdsl.Loop
+  // CHECK: module @loop
+  // CHECK: func @main(%[[arg0:.*]]: tensor<4xsi32>) -> tensor<4xsi32>
+  // CHECK: %{{.*}} = tile.constant(5 : i64) : tensor<si32>
+  // CHECK: %{{.*}} = tile.constant(1 : i64) : tensor<si32>
+  // CHECK: %{{.*}} = tile.index 0 : tensor<1xsi32>
+  // CHECK: %[[MTC:.*]] = tile.add %{{.*}}, %{{.*}} : (tensor<1xsi32>, tensor<si32>) -> tensor<1xsi32>
+  // CHECK:   %[[RES:.*]] = tile.loop %[[MTC]] iter_args(%[[arg1:.*]] = %[[arg0]]) -> (tensor<4xsi32>)
+  // CHECK:     %[[Y:.*]] = tile.add %[[arg1]], %{{.*}} : (tensor<4xsi32>, tensor<si32>) -> tensor<4xsi32>
+  // CHECK:     tile.yield %[[Y]] : tensor<4xsi32>
+  // CHECK:   return %[[RES]] : tensor<4xsi32>
+  // clang-format on
+  std::vector<int> input = {
+      1, 1, 1, 1  //
+  };
+
+  std::vector<int> expected = {
+      6, 6, 6, 6  //
+  };
+  checkExact(program, {input}, {expected});
+}
+
+TEST_F(CppEdsl, LoopMultipleIterators) {
+  auto A = Placeholder(DType::INT32, {4});
+  auto B = Placeholder(DType::INT32, {4});
+  auto C = Placeholder(DType::INT32, {4});
+  TensorVec results = PLAIDML_EDSL_LOOP(5, {A, B, C})(TensorVec args) {
+    int size = args.size();
+    for (int i = 0; i < size; i++) {
+      args[i] = args[i] + i + 1;
+    }
+    return args;
+  };
+
+  auto program = makeProgram("loop", {A, B, C}, results);
+  // clang-format off
+  // CHECK-LABEL: CppEdsl.LoopMultipleIterators
+  // CHECK: module @loop
+  // CHECK: func @main(%[[arg0:.*]]: tensor<4xsi32>, %[[arg1:.*]]: tensor<4xsi32>, %[[arg2:.*]]: tensor<4xsi32>) -> (tensor<4xsi32>, tensor<4xsi32>, tensor<4xsi32>)
+  // CHECK:   %{{.*}} = tile.constant(5 : i64) : tensor<si32>
+  // CHECK:   %{{.*}} = tile.constant(2 : i64) : tensor<si32>
+  // CHECK:   %{{.*}} = tile.constant(1 : i64) : tensor<si32>
+  // CHECK:   %{{.*}} = tile.index 0 : tensor<1xsi32>
+  // CHECK:   %[[MTC:.*]] = tile.add %{{.*}}, %{{.*}} : (tensor<1xsi32>, tensor<si32>) -> tensor<1xsi32>
+  // CHECK:   %[[RES:.*]]:3 = tile.loop %[[MTC]] iter_args(%[[arg3:.*]] = %[[arg0]], %[[arg4:.*]] = %[[arg1]], %[[arg5:.*]] = %[[arg2]]) -> (tensor<4xsi32>, tensor<4xsi32>, tensor<4xsi32>)
+  // CHECK:     %[[X0:.*]] = tile.add %[[arg3]], %{{.*}} : (tensor<4xsi32>, tensor<si32>) -> tensor<4xsi32>
+  // CHECK:     %[[X1:.*]] = tile.add %[[arg4]], %{{.*}} : (tensor<4xsi32>, tensor<si32>) -> tensor<4xsi32>
+  // CHECK:     %[[X2:.*]] = tile.add %[[X1]], %{{.*}} : (tensor<4xsi32>, tensor<si32>) -> tensor<4xsi32>
+  // CHECK:     %[[X3:.*]] = tile.add %[[arg5]], %{{.*}} : (tensor<4xsi32>, tensor<si32>) -> tensor<4xsi32>
+  // CHECK:     %[[X4:.*]] = tile.add %[[X3]], %{{.*}} : (tensor<4xsi32>, tensor<si32>) -> tensor<4xsi32>
+  // CHECK:     tile.yield %[[X0]], %[[X2]], %[[X4]] : tensor<4xsi32>, tensor<4xsi32>, tensor<4xsi32>
+  // CHECK:   return %[[RES]]#0, %[[RES]]#1, %[[RES]]#2 : tensor<4xsi32>, tensor<4xsi32>, tensor<4xsi32>
+  // clang-format on
+  std::vector<int> inputA = {
+      1, 1, 1, 1  //
+  };
+  std::vector<int> inputB = {
+      1, 2, 3, 4  //
+  };
+  std::vector<int> inputC = {
+      -3, -2, 1, 0  //
+  };
+
+  std::vector<int> expectedA = {
+      6, 6, 6, 6  //
+  };
+  std::vector<int> expectedB = {
+      11, 12, 13, 14  //
+  };
+  std::vector<int> expectedC = {
+      12, 13, 16, 15  //
+  };
+  checkExact(program, {inputA, inputB, inputC}, {expectedA, expectedB, expectedC});
+}
+
+TEST_F(CppEdsl, LoopBuilder) {
+  auto A = Placeholder(DType::FLOAT32, {4});
+  auto B = Placeholder(DType::FLOAT32, {4});
+  auto loopBody = [=](TensorVec args) {
+    args[0] = args[1] + 1;
+    args[1] = args[0] + 3;
+    return args;
+  };
+  TensorVec output = LoopBuilder(3).initIterArgs({A, B}).setLoopBody(loopBody);
+  auto program = makeProgram("loop", {A, B}, output);
+  // clang-format off
+  // CHECK-LABEL: CppEdsl.LoopBuilder
+  // CHECK: module @loop
+  // CHECK: func @main(%[[arg0:.*]]: tensor<4xf32>, %[[arg1:.*]]: tensor<4xf32>) -> (tensor<4xf32>, tensor<4xf32>)
+  // CHECK:   %{{.*}} = tile.constant(3 : i64) : tensor<si32>
+  // CHECK:   %{{.*}} = tile.constant(1.000000e+00 : f64) : tensor<f32>
+  // CHECK:   %{{.*}} = tile.constant(3.000000e+00 : f64) : tensor<f32>
+  // CHECK:   %{{.*}} = tile.index 0 : tensor<1xsi32>
+  // CHECK:   %[[MTC:.*]] = tile.add %{{.*}}, %{{.*}} : (tensor<1xsi32>, tensor<si32>) -> tensor<1xsi32>
+  // CHECK:   %[[RES:.*]]:2 = tile.loop %[[MTC]] iter_args(%[[arg2:.*]] = %[[arg0]], %[[arg3:.*]] = %[[arg1]]) -> (tensor<4xf32>, tensor<4xf32>)
+  // CHECK:     %[[Y0:.*]] = tile.add %[[arg3]], %{{.*}} : (tensor<4xf32>, tensor<f32>) -> tensor<4xf32>
+  // CHECK:     %[[Y1:.*]] = tile.add %[[Y0]], %{{.*}}: (tensor<4xf32>, tensor<f32>) -> tensor<4xf32>
+  // CHECK:     tile.yield %[[Y0]], %[[Y1]] : tensor<4xf32>, tensor<4xf32>
+  // CHECK: return %[[RES]]#0, %[[RES]]#1 : tensor<4xf32>, tensor<4xf32>
+  // clang-format on
+  std::vector<float> input1 = {
+      1, 1, 1, 1  //
+  };
+  std::vector<float> input2 = {
+      0, 0, 0, 0  //
+  };
+  std::vector<float> expected1 = {
+      9, 9, 9, 9  //
+  };
+  std::vector<float> expected2 = {
+      12, 12, 12, 12  //
+  };
+  checkExact(program, {input1, input2}, {expected1, expected2});
+}
+
+TEST_F(CppEdsl, LoopNested) {
+  auto A = Placeholder(DType::INT32, {4});
+  auto B = Placeholder(DType::INT32, {4});
+  auto IX = Placeholder(DType::INT32, {1});
+  Tensor C = A + B;
+  TensorVec O_outer = PLAIDML_EDSL_LOOP(IX, {C})(TensorVec args_outer) {
+    TensorVec O_inner = PLAIDML_EDSL_LOOP(3, {args_outer[0]})(TensorVec args_inner) {
+      args_inner[0] = args_inner[0] + A;
+      return args_inner;
+    };
+    args_outer[0] = args_outer[0] + O_inner[0];
+    return args_outer;
+  };
+  Tensor O = PLAIDML_EDSL_LOOP(3, {O_outer[0]})(TensorVec args) {
+    args[0] = args[0] + B;
+    return args;
+  };
+  auto program = makeProgram("loop", {A, B, IX}, {O});
+  // clang-format off
+  // CHECK-LABEL: CppEdsl.LoopNested
+  // CHECK: module @loop
+  // CHECK: func @main(%[[arg0:.*]]: tensor<4xsi32>, %[[arg1:.*]]: tensor<4xsi32>, %[[arg2:.*]]: tensor<1xsi32>) -> tensor<4xsi32> {
+  // CHECK:   %{{.*}} = tile.constant(3 : i64) : tensor<si32>
+  // CHECK:   %{{.*}} = tile.index 0 : tensor<1xsi32>
+  // CHECK:   %[[MTC1:.*]] = tile.add %{{.*}}, %{{.*}} : (tensor<1xsi32>, tensor<si32>) -> tensor<1xsi32>
+  // CHECK:   %[[MTC2:.*]] = tile.ident %[[arg2]] : (tensor<1xsi32>) -> tensor<1xsi32>
+  // CHECK:   %[[C:.*]] = tile.add %[[arg0]], %[[arg1]] : (tensor<4xsi32>, tensor<4xsi32>) -> tensor<4xsi32>
+  // CHECK:   %[[L1:.*]] = tile.loop %[[MTC2]] iter_args(%[[arg3:.*]] = %[[C]]) -> (tensor<4xsi32>) {
+  // CHECK:     %[[L3:.*]] = tile.loop %[[MTC1]] iter_args(%[[arg4:.*]] = %[[arg3]]) -> (tensor<4xsi32>) {
+  // CHECK:       %[[Y:.*]] = tile.add %[[arg4]], %[[arg0]] : (tensor<4xsi32>, tensor<4xsi32>) -> tensor<4xsi32>
+  // CHECK:       tile.yield %[[Y]] : tensor<4xsi32>
+  // CHECK:     }
+  // CHECK:     %[[Y:.*]] = tile.add %[[arg3]], %[[L3]] : (tensor<4xsi32>, tensor<4xsi32>) -> tensor<4xsi32>
+  // CHECK:     tile.yield %[[Y]] : tensor<4xsi32>
+  // CHECK:   }
+  // CHECK:   %[[L2:.*]] = tile.loop %[[MTC1]] iter_args(%[[arg3:.*]] = %[[L1]]) -> (tensor<4xsi32>) {
+  // CHECK:     %[[Y:.*]] = tile.add %[[arg3]], %[[arg1]] : (tensor<4xsi32>, tensor<4xsi32>) -> tensor<4xsi32>
+  // CHECK:     tile.yield %[[Y]] : tensor<4xsi32>
+  // CHECK:   }
+  // CHECK:   return %[[L2]] : tensor<4xsi32>
+  // CHECK: }
+  // clang-format on
+  std::vector<int> inputA = {
+      2, 3, 4, 5  //
+  };
+  std::vector<int> inputB = {
+      3, 7, 9, 11  //
+  };
+  std::vector<int> idx = {
+      5,  //
+  };
+  std::vector<int> expected = {
+      355, 620, 815, 1010  //
+  };
+  checkExact(program, {inputA, inputB, idx}, {expected});
+}
+
 TEST_F(CppEdsl, Layer) {
   auto A = Placeholder(DType::FLOAT32, {10, 20});
   Tensor O = layer("relu", {A}, [&]() { return Relu(A); });

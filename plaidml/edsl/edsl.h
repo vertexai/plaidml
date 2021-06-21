@@ -1715,5 +1715,91 @@ inline Tensor layer(const std::string& op, const TensorVec& operands, const Laye
   return layer(op, operands, {}, fn, loc);
 }
 
+#define PLAIDML_EDSL_LOOP(x, ...) LoopBuilder(x).initIterArgs(__VA_ARGS__)& [=]
+
+using LoopSingleFn = std::function<Tensor(Tensor)>;
+using LoopMultiFn = std::function<TensorVec(TensorVec)>;
+
+class LoopBuilder {
+ public:
+  explicit LoopBuilder(int64_t count) { operands.push_back(index({TensorDim(1)}, 0) + count); }
+  explicit LoopBuilder(Tensor count) { operands.push_back(ident(count)); }
+
+  LoopBuilder& setLoopBody(LoopMultiFn fn, edsl_source_location loc = edsl_source_location::current()) {
+    if (operands.size() < 2) {
+      throw ffi_exception("Loop expects at least one iteration argument.", loc);
+    }
+    results = fn({operands.begin() + 1, operands.end()});
+    return *this;
+  }
+
+  LoopBuilder& setLoopBody(LoopSingleFn fn, edsl_source_location loc = edsl_source_location::current()) {
+    if (operands.size() < 2) {
+      throw ffi_exception("Loop expects at least one iteration argument.", loc);
+    }
+    Tensor out = fn(operands[1]);
+    results.push_back(out);
+    return *this;
+  }
+
+  LoopBuilder& initIterArgs(TensorVec args) {
+    operands.insert(operands.end(), args.begin(), args.end());
+    return *this;
+  }
+
+  LoopBuilder& initIterArgs(Tensor iter) {
+    operands.push_back(iter);
+    return *this;
+  }
+
+  TensorVec build(edsl_source_location loc = edsl_source_location::current()) const {
+    if (operands.size() - 1 != results.size()) {
+      throw ffi_exception("Loop expects the same number of iteration args and results ", loc);
+    }
+
+    std::string op = "loop";
+    std::vector<plaidml_expr*> rawOperands;
+    rawOperands.reserve(operands.size());
+    for (Tensor operand : operands) {
+      rawOperands.push_back(operand.as_ptr());
+    }
+    std::vector<plaidml_expr*> rawResults;
+    rawResults.reserve(results.size());
+    for (Tensor result : results) {
+      rawResults.push_back(result.as_ptr());
+    }
+
+    Tensor array = Tensor{ffi::call<plaidml_expr*>(  //
+        loc,                                         //
+        plaidml_expr_loop,                           //
+        op.c_str(),                                  //
+        rawOperands.size(),                          //
+        rawOperands.data(),                          //
+        rawResults.size(),                           //
+        rawResults.data())};
+
+    TensorVec output;
+    for (size_t i = 0; i < results.size(); i++) {
+      output.push_back(array.element(i));
+    }
+    return output;
+  }
+
+  operator TensorVec() {
+    auto result = build();
+    return TensorVec(result.begin(), result.end());
+  }
+  operator Tensor() { return build()[0]; }
+
+  template <typename TLambda>
+  LoopBuilder& operator&(TLambda fn) {
+    return setLoopBody(fn);
+  }
+
+ private:
+  TensorVec operands;
+  TensorVec results;
+};
+
 }  // namespace edsl
 }  // namespace plaidml

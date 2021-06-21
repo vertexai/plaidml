@@ -849,4 +849,29 @@ plaidml_exprs* plaidml_expr_layer_end(  //
   });
 }
 
+plaidml_expr* plaidml_expr_loop(  //
+    plaidml_error* err,           //
+    const char* op,               //
+    size_t ninputs,               //
+    plaidml_expr** inputs,        //
+    size_t noutputs,              //
+    plaidml_expr** outputs) {
+  return ffi_wrap<plaidml_expr*>(err, nullptr, [&] {
+    IVLOG(3, "plaidml_expr_loop (" << op << ", inputs: " << ninputs << ")");
+    std::vector<ast::ExprNodePtr> operands(ninputs);
+    for (size_t i = 0; i < ninputs; i++) {
+      operands[i] = inputs[i]->node;
+    }
+    std::vector<ast::ExprNodePtr> results(noutputs);
+    for (size_t i = 0; i < noutputs; i++) {
+      results[i] = outputs[i]->node;
+    }
+    auto node = std::make_shared<ast::ExprNodeLoop>(op, operands, results);
+    ast::Evaluator evaluator;
+    evaluator.verify(node);
+    LayerContext::get()->addNode(node);
+    return new plaidml_expr{node};
+  });
+}
+
 }  // extern "C"

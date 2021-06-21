@@ -9,6 +9,7 @@
 #include "mlir/IR/OpDefinition.h"
 #include "mlir/IR/OpImplementation.h"
 #include "mlir/Interfaces/ControlFlowInterfaces.h"
+#include "mlir/Interfaces/LoopLikeInterface.h"
 #include "mlir/Interfaces/SideEffectInterfaces.h"
 
 #include "pmlc/dialect/tile/ir/types.h"
@@ -21,13 +22,15 @@
 
 namespace pmlc::dialect::tile {
 
+using namespace mlir; // NOLINT [build/namespaces]
+
 using mlir::IntegerSet;
 using mlir::IntegerSetAttr;
 using util::AggregationKind;
 using util::CombinationKind;
+using util::GatherMode;
 using util::InterpolationMode;
 using util::NearestMode;
-using util::GatherMode;
 using util::ScatterMode;
 
 } // namespace pmlc::dialect::tile

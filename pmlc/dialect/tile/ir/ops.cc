@@ -9,6 +9,7 @@
 #include "mlir/IR/Matchers.h"
 #include "mlir/IR/PatternMatch.h"
 #include "mlir/Support/DebugStringHelper.h"
+#include "mlir/Support/MathExtras.h"
 
 #include "pmlc/dialect/tile/ir/util.h"
 #include "pmlc/util/logging.h"
@@ -358,6 +359,398 @@ void ScatterOp::build(OpBuilder &builder, OperationState &result,
   result.addAttribute("axis", axis);
   result.addAttribute("mode", mode);
   result.addTypes(resultType);
+}
+
+//===----------------------------------------------------------------------===//
+// LoopOp
+//===----------------------------------------------------------------------===//
+
+static LogicalResult verify(LoopOp op) {
+  // Check that the body defines as single block argument for the induction
+  // variable.
+  auto opNumResults = op.getNumResults();
+  if (opNumResults == 0)
+    return success();
+  // If LoopOp defines values, check that the number and types of
+  // the defined values match LoopOp initial iter operands and backedge
+  // basic block arguments.
+  if (op.getNumIterOperands() != opNumResults)
+    return op.emitOpError(
+        "mismatch in number of loop-carried values and defined values");
+  if (op.getNumRegionIterArgs() != opNumResults)
+    return op.emitOpError(
+        "mismatch in number of basic block args and defined values");
+  auto iterOperands = op.getIterOperands();
+  auto iterArgs = op.getRegionIterArgs();
+  auto opResults = op.getResults();
+  unsigned i = 0;
+  for (auto e : llvm::zip(iterOperands, iterArgs, opResults)) {
+    if (std::get<0>(e).getType() != std::get<2>(e).getType())
+      return op.emitOpError() << "types mismatch between " << i
+                              << "th iter operand and defined value";
+    if (std::get<1>(e).getType() != std::get<2>(e).getType())
+      return op.emitOpError() << "types mismatch between " << i
+                              << "th iter region arg and defined value";
+
+    i++;
+  }
+
+  return RegionBranchOpInterface::verifyTypes(op);
+}
+
+/// Prints the initialization list in the form of
+///   <prefix>(%inner = %outer, %inner2 = %outer2, <...>)
+/// where 'inner' values are assumed to be region arguments and 'outer' values
+/// are regular SSA values.
+static void printInitializationList(OpAsmPrinter &p,
+                                    Block::BlockArgListType blocksArgs,
+                                    ValueRange initializers,
+                                    StringRef prefix = "") {
+  assert(blocksArgs.size() == initializers.size() &&
+         "expected same length of arguments and initializers");
+  if (initializers.empty())
+    return;
+
+  p << prefix << '(';
+  llvm::interleaveComma(llvm::zip(blocksArgs, initializers), p, [&](auto it) {
+    p << std::get<0>(it) << " = " << std::get<1>(it);
+  });
+  p << ")";
+}
+
+static void print(OpAsmPrinter &p, LoopOp op) {
+  p << op.getOperationName() << " " << op.maxTripCount();
+
+  printInitializationList(p, op.getRegionIterArgs(), op.getIterOperands(),
+                          " iter_args");
+  if (!op.getIterOperands().empty())
+    p << " -> (" << op.getIterOperands().getTypes() << ')';
+  p.printRegion(op.region(),
+                /*printEntryBlockArgs=*/false,
+                /*printBlockTerminators=*/op.hasIterOperands());
+  p.printOptionalAttrDict(op.getAttrs());
+}
+
+static ParseResult parseLoopOp(OpAsmParser &parser, OperationState &result) {
+  auto &builder = parser.getBuilder();
+  OpAsmParser::OperandType maxTripCount;
+  auto tensorType = RankedTensorType::get(ArrayRef<int64_t>{1},
+                                          builder.getIntegerType(32, true));
+  if (parser.parseOperand(maxTripCount) ||
+      parser.resolveOperand(maxTripCount, tensorType, result.operands)) {
+    return failure();
+  }
+  // Parse the optional initial iteration arguments.
+  SmallVector<OpAsmParser::OperandType, 4> regionArgs, operands;
+  SmallVector<Type, 4> argTypes;
+
+  if (succeeded(parser.parseOptionalKeyword("iter_args"))) {
+    // Parse assignment list and results type list.
+    if (parser.parseAssignmentList(regionArgs, operands) ||
+        parser.parseArrowTypeList(result.types))
+      return failure();
+    // Resolve input operands.
+    for (auto operand_type : llvm::zip(operands, result.types))
+      if (parser.resolveOperand(std::get<0>(operand_type),
+                                std::get<1>(operand_type), result.operands))
+        return failure();
+  }
+  argTypes.push_back(tensorType);
+  // Loop carried variables
+  argTypes.append(result.types.begin(), result.types.end());
+  // Parse the body region.
+  Region *body = result.addRegion();
+  if (regionArgs.size() != argTypes.size() - 1)
+    return parser.emitError(
+        parser.getNameLoc(),
+        "mismatch in number of loop-carried values and defined values");
+
+  if (parser.parseRegion(*body, regionArgs,
+                         {argTypes.begin() + 1, argTypes.end()}))
+    return failure();
+
+  LoopOp::ensureTerminator(*body, builder, result.location);
+
+  // Parse the optional attribute list.
+  if (parser.parseOptionalAttrDict(result.attributes))
+    return failure();
+
+  return success();
+}
+void LoopOp::build(OpBuilder &builder, OperationState &result,
+                   Value maxTripCount, ValueRange iterArgs,
+                   BodyBuilderFn bodyBuilder) {
+  result.addOperands(maxTripCount);
+  result.addOperands(iterArgs);
+  for (Value v : iterArgs)
+    result.addTypes(v.getType());
+  Region *bodyRegion = result.addRegion();
+  bodyRegion->push_back(new Block);
+  Block &bodyBlock = bodyRegion->front();
+  for (Value v : iterArgs)
+    bodyBlock.addArgument(v.getType());
+
+  // Create the default terminator if the builder is not provided and if the
+  // iteration arguments are not provided. Otherwise, leave this to the caller
+  // because we don't know which values to return from the loop.
+  if (iterArgs.empty() && !bodyBuilder) {
+    LoopOp::ensureTerminator(*bodyRegion, builder, result.location);
+  } else if (bodyBuilder) {
+    OpBuilder::InsertionGuard guard(builder);
+    builder.setInsertionPointToStart(&bodyBlock);
+    bodyBuilder(builder, result.location, {},
+                bodyBlock.getArguments().drop_front());
+  }
+}
+Region &LoopOp::getLoopBody() { return region(); }
+
+bool LoopOp::isDefinedOutsideOfLoop(Value value) {
+  return !region().isAncestor(value.getParentRegion());
+}
+
+LogicalResult LoopOp::moveOutOfLoop(ArrayRef<Operation *> ops) {
+  for (auto op : ops)
+    op->moveBefore(*this);
+  return success();
+}
+
+LoopOp getForInductionVarOwner(Value val) {
+  auto ivArg = val.dyn_cast<BlockArgument>();
+  if (!ivArg)
+    return LoopOp();
+  assert(ivArg.getOwner() && "unlinked block argument");
+  auto *containingOp = ivArg.getOwner()->getParentOp();
+  return dyn_cast_or_null<LoopOp>(containingOp);
+}
+
+/// Return operands used when entering the region at 'index'. These operands
+/// correspond to the loop iterator operands, i.e., those excluding the
+/// induction variable. LoopOp only has one region, so 0 is the only valid value
+/// for `index`.
+OperandRange LoopOp::getSuccessorEntryOperands(unsigned index) {
+  assert(index == 0 && "invalid region index");
+
+  // The initial operands map to the loop arguments after the induction
+  // variable.
+  return initArgs();
+}
+
+/// Given the region at `index`, or the parent operation if `index` is None,
+/// return the successor regions. These are the regions that may be selected
+/// during the flow of control. `operands` is a set of optional attributes that
+/// correspond to a constant value for each operand, or null if that operand is
+/// not a constant.
+void LoopOp::getSuccessorRegions(Optional<unsigned> index,
+                                 ArrayRef<Attribute> operands,
+                                 SmallVectorImpl<RegionSuccessor> &regions) {
+  // If the predecessor is the LoopOp, branch into the body using the iterator
+  // arguments.
+  if (!index.hasValue()) {
+    regions.push_back(RegionSuccessor(&getLoopBody(), getRegionIterArgs()));
+    return;
+  }
+
+  // Otherwise, the loop may branch back to itself or the parent operation.
+  assert(index.getValue() == 0 && "expected loop region");
+  regions.push_back(RegionSuccessor(&getLoopBody(), getRegionIterArgs()));
+  regions.push_back(RegionSuccessor(getResults()));
+}
+
+void LoopOp::getNumRegionInvocations(ArrayRef<Attribute> operands,
+                                     SmallVectorImpl<int64_t> &countPerRegion) {
+  assert(countPerRegion.empty());
+  countPerRegion.resize(1);
+
+  auto maxTripCount = operands[0].dyn_cast_or_null<IntegerAttr>();
+
+  // Loop bounds are not known statically.
+  if (!maxTripCount) {
+    countPerRegion[0] = -1;
+    return;
+  }
+
+  countPerRegion[0] = ceilDiv(maxTripCount.getValue().getSExtValue(), 1);
+}
+
+/// Replaces the given op with the contents of the given single-block region,
+/// using the operands of the block terminator to replace operation results.
+static void replaceOpWithRegion(PatternRewriter &rewriter, Operation *op,
+                                Region &region, ValueRange blockArgs = {}) {
+  assert(llvm::hasSingleElement(region) && "expected single-region block");
+  Block *block = &region.front();
+  Operation *terminator = block->getTerminator();
+  ValueRange results = terminator->getOperands();
+  rewriter.mergeBlockBefore(block, op, blockArgs);
+  rewriter.replaceOp(op, results);
+  rewriter.eraseOp(terminator);
+}
+
+namespace {
+// Fold away LoopOp iter arguments that are also yielded by the op.
+// These arguments must be defined outside of the LoopOp region and can just be
+// forwarded after simplifying the op inits, yields and returns.
+//
+// The implementation uses `mergeBlockBefore` to steal the content of the
+// original LoopOp and avoid cloning.
+struct LoopOpIterArgsFolder : public OpRewritePattern<LoopOp> {
+  using OpRewritePattern<LoopOp>::OpRewritePattern;
+
+  LogicalResult matchAndRewrite(LoopOp loopOp,
+                                PatternRewriter &rewriter) const final {
+    bool canonicalize = false;
+    Block &block = loopOp.region().front();
+    auto yieldOp = cast<YieldOp>(block.getTerminator());
+
+    // An internal flat vector of block transfer
+    // arguments `newBlockTransferArgs` keeps the 1-1 mapping of original to
+    // transformed block argument mappings. This plays the role of a
+    // BlockAndValueMapping for the particular use case of calling into
+    // `mergeBlockBefore`.
+    SmallVector<bool, 4> keepMask;
+    keepMask.reserve(yieldOp.getNumOperands());
+    SmallVector<Value, 4> newBlockTransferArgs, newIterArgs, newYieldValues,
+        newResultValues;
+    newBlockTransferArgs.reserve(loopOp.getNumIterOperands());
+    newBlockTransferArgs.push_back(Value()); // iv placeholder with null value
+    newIterArgs.reserve(loopOp.getNumIterOperands());
+    newYieldValues.reserve(yieldOp.getNumOperands());
+    newResultValues.reserve(loopOp.getNumResults());
+    for (auto it : llvm::zip(loopOp.getIterOperands(),   // iter from outside
+                             loopOp.getRegionIterArgs(), // iter inside region
+                             yieldOp.getOperands())      // iter yield
+    ) {
+      // Forwarded is `true` when the region `iter` argument is yielded.
+      bool forwarded = (std::get<1>(it) == std::get<2>(it));
+      keepMask.push_back(!forwarded);
+      canonicalize |= forwarded;
+      if (forwarded) {
+        newBlockTransferArgs.push_back(std::get<0>(it));
+        newResultValues.push_back(std::get<0>(it));
+        continue;
+      }
+      newIterArgs.push_back(std::get<0>(it));
+      newYieldValues.push_back(std::get<2>(it));
+      newBlockTransferArgs.push_back(Value()); // placeholder with null value
+      newResultValues.push_back(Value());      // placeholder with null value
+    }
+
+    if (!canonicalize)
+      return failure();
+
+    LoopOp newLoopOp = rewriter.create<LoopOp>(
+        loopOp.getLoc(), loopOp.maxTripCount(), newIterArgs);
+    Block &newBlock = newLoopOp.region().front();
+
+    // Replace the null placeholders with newly constructed values.
+    newBlockTransferArgs[0] = newBlock.getArgument(0); // iv
+    for (unsigned idx = 0, collapsedIdx = 0, e = newResultValues.size();
+         idx != e; ++idx) {
+      Value &blockTransferArg = newBlockTransferArgs[idx];
+      Value &newResultVal = newResultValues[idx];
+      assert((blockTransferArg && newResultVal) ||
+             (!blockTransferArg && !newResultVal));
+      if (!blockTransferArg) {
+        blockTransferArg = newLoopOp.getRegionIterArgs()[collapsedIdx];
+        newResultVal = newLoopOp.getResult(collapsedIdx++);
+      }
+    }
+
+    Block &oldBlock = loopOp.region().front();
+    assert(oldBlock.getNumArguments() == newBlockTransferArgs.size() &&
+           "unexpected argument size mismatch");
+
+    // No results case: the tile::loopOp builder already created a zero
+    // result terminator. Merge before this terminator and just get rid of the
+    // original terminator that has been merged in.
+    if (newIterArgs.empty()) {
+      auto newYieldOp = cast<YieldOp>(newBlock.getTerminator());
+      rewriter.mergeBlockBefore(&oldBlock, newYieldOp, newBlockTransferArgs);
+      rewriter.eraseOp(newBlock.getTerminator()->getPrevNode());
+      rewriter.replaceOp(loopOp, newResultValues);
+      return success();
+    }
+
+    // No terminator case: merge and rewrite the merged terminator.
+    auto cloneFilteredTerminator = [&](YieldOp mergedTerminator) {
+      OpBuilder::InsertionGuard g(rewriter);
+      rewriter.setInsertionPoint(mergedTerminator);
+      SmallVector<Value, 4> filteredOperands;
+      filteredOperands.reserve(newResultValues.size());
+      for (unsigned idx = 0, e = keepMask.size(); idx < e; ++idx)
+        if (keepMask[idx])
+          filteredOperands.push_back(mergedTerminator.getOperand(idx));
+      rewriter.create<YieldOp>(mergedTerminator.getLoc(), filteredOperands);
+    };
+
+    rewriter.mergeBlocks(&oldBlock, &newBlock, newBlockTransferArgs);
+    auto mergedYieldOp = cast<YieldOp>(newBlock.getTerminator());
+    cloneFilteredTerminator(mergedYieldOp);
+    rewriter.eraseOp(mergedYieldOp);
+    rewriter.replaceOp(loopOp, newResultValues);
+    return success();
+  }
+};
+
+/// Rewriting pattern that erases loops that are known not to iterate and
+/// replaces single-iteration loops with their bodies.
+struct SimplifyTrivialLoops : public OpRewritePattern<LoopOp> {
+  using OpRewritePattern<LoopOp>::OpRewritePattern;
+
+  LogicalResult matchAndRewrite(LoopOp op,
+                                PatternRewriter &rewriter) const override {
+    auto maxTripCount = op.maxTripCount().getDefiningOp<ConstantOp>();
+    if (!maxTripCount)
+      return failure();
+
+    // If the loop is known to have 0 iterations, remove it.
+    llvm::APInt maxTripCountValue =
+        maxTripCount.getValue().cast<IntegerAttr>().getValue();
+    if (maxTripCountValue == 0) {
+      rewriter.replaceOp(op, op.getIterOperands());
+      return success();
+    }
+
+    // If the loop is known to have 1 iteration, inline its body and remove the
+    // loop.
+    if (maxTripCountValue == 1) {
+      SmallVector<Value, 4> blockArgs;
+      blockArgs.reserve(op.getNumIterOperands());
+      llvm::append_range(blockArgs, op.getIterOperands());
+      replaceOpWithRegion(rewriter, op, op.getLoopBody(), blockArgs);
+      return success();
+    }
+
+    return failure();
+  }
+};
+} // namespace
+
+void LoopOp::getCanonicalizationPatterns(OwningRewritePatternList &results,
+                                         MLIRContext *context) {
+  results.insert<LoopOpIterArgsFolder, SimplifyTrivialLoops>(context);
+}
+
+//===----------------------------------------------------------------------===//
+// YieldOp
+//===----------------------------------------------------------------------===//
+
+static ParseResult parseYieldOp(OpAsmParser &parser, OperationState &result) {
+  SmallVector<OpAsmParser::OperandType, 4> operands;
+  SmallVector<Type, 4> types;
+  llvm::SMLoc loc = parser.getCurrentLocation();
+  // Parse variadic operands list, their types, and resolve operands to SSA
+  // values.
+  if (parser.parseOperandList(operands) ||
+      parser.parseOptionalColonTypeList(types) ||
+      parser.resolveOperands(operands, types, loc, result.operands))
+    return failure();
+  return success();
+}
+
+static void print(OpAsmPrinter &p, tile::YieldOp op) {
+  p << op.getOperationName();
+  if (op.getNumOperands() != 0)
+    p << ' ' << op.getOperands() << " : " << op.getOperandTypes();
 }
 
 } // namespace pmlc::dialect::tile

@@ -1077,6 +1077,56 @@ struct ScfForOpConversion : public OpConversionPattern<scf::ForOp> {
       oldArgs[i].replaceAllUsesWith(newArgs[i]);
     }
     rewriter.replaceOp(op, newOp.results());
+    for (auto result : op.results()) {
+      result.replaceAllUsesWith(newOp.getResult(result.getResultNumber()));
+    }
+    return success();
+  }
+};
+
+struct LoopOpConversion : public OpConversionPattern<tile::LoopOp> {
+  using OpConversionPattern<tile::LoopOp>::OpConversionPattern;
+
+  LogicalResult
+  matchAndRewrite(tile::LoopOp op, ArrayRef<Value> operands,
+                  ConversionPatternRewriter &rewriter) const override {
+    auto loc = op.getLoc();
+    tile::LoopOpAdaptor oldLoop(operands);
+    auto &oldBodyOps = op.getBody()->getOperations();
+    auto indexType = rewriter.getIndexType();
+    auto zero = rewriter.create<mlir::ConstantOp>(
+        loc, indexType, rewriter.getIntegerAttr(indexType, 0));
+    auto one = rewriter.create<mlir::ConstantOp>(
+        loc, indexType, rewriter.getIntegerAttr(indexType, 1));
+    auto maxTripCount = rewriter.create<mlir::LoadOp>(
+        loc, oldLoop.maxTripCount(), std::vector<Value>{zero});
+    auto maxTripCountIdx =
+        rewriter.create<mlir::IndexCastOp>(loc, maxTripCount, indexType);
+    auto newOp = rewriter.create<scf::ForOp>(op.getLoc(), zero, maxTripCountIdx,
+                                             one, oldLoop.initArgs());
+    auto &newBodyOps = newOp.getBody()->getOperations();
+    newBodyOps.splice(std::prev(newBodyOps.end()), oldBodyOps,
+                      oldBodyOps.begin(), oldBodyOps.end());
+    auto oldArgs = op.getBody()->getArguments();
+    auto newArgs = newOp.getBody()->getArguments();
+    for (unsigned i = 0; i < oldArgs.size(); ++i) {
+      oldArgs[i].replaceAllUsesWith(newArgs[i + 1]);
+    }
+    rewriter.replaceOp(op, newOp.results());
+    return success();
+  }
+};
+
+struct YieldOpConversion : public OpConversionPattern<tile::YieldOp> {
+  using OpConversionPattern<tile::YieldOp>::OpConversionPattern;
+
+  LogicalResult
+  matchAndRewrite(tile::YieldOp op, ArrayRef<Value> operands,
+                  ConversionPatternRewriter &rewriter) const override {
+    auto loc = op.getLoc();
+    auto scfYieldOp = rewriter.create<mlir::scf::YieldOp>(loc, operands);
+    op->replaceAllUsesWith(scfYieldOp);
+    op.erase();
     return success();
   }
 };
@@ -1090,7 +1140,7 @@ struct LowerTileToPXAPass : public LowerTileToPXABase<LowerTileToPXAPass> {
       for (OpOperand &operand : op->getOpOperands()) {
         Value value = operand.get();
         bool needsIdent =                                  //
-            value.isa<BlockArgument>() ||                  // Block arguemnt
+            value.isa<BlockArgument>() ||                  // Block argument
             matchPattern(value, m_Constant()) ||           // Constant op
             matchPattern(value, m_Op<stdx::UnpackOp>()) || // Direct from unpack
             matchPattern(value, m_Op<tile::ReshapeOp>());  // Reshape op
@@ -1155,6 +1205,8 @@ struct LowerTileToPXAPass : public LowerTileToPXABase<LowerTileToPXAPass> {
         PackOpConversion,     //
         UnpackOpConversion,   //
         ScfForOpConversion,   //
+        LoopOpConversion,     //
+        YieldOpConversion,    //
         ContractionOpConversion<CombinationKind::none, FirstOperand>,
         ContractionOpConversion<CombinationKind::add, StdOp<mlir::AddFOp>,
                                 ResultIs<EltwiseFloat>>,

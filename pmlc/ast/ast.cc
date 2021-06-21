@@ -141,10 +141,10 @@ std::string ExprNodeElement::str() const {
 
 ExprNodeInput::ExprNodeInput(const TensorShape &shape, llvm::StringRef name)
     : Base(name), shape(shape) {
-      if (shape.elementType == DataType::invalid) {
-        throw std::runtime_error("DType::INVALID not appropriate here");
-      }
-    }
+  if (shape.elementType == DataType::invalid) {
+    throw std::runtime_error("DType::INVALID not appropriate here");
+  }
+}
 
 std::string ExprNodeInput::str() const {
   if (name.size()) {
@@ -186,6 +186,17 @@ ExprNodeLayer::ExprNodeLayer(llvm::StringRef op,
 std::string ExprNodeLayer::str() const {
   return llvm::formatv("layer({0})", op);
 }
+
+//
+// ExprNodeLoop
+//
+
+ExprNodeLoop::ExprNodeLoop(llvm::StringRef op,
+                           llvm::ArrayRef<ExprNodePtr> operands,
+                           llvm::ArrayRef<ExprNodePtr> results)
+    : op(op), operands(operands), results(results) {}
+
+std::string ExprNodeLoop::str() const { return llvm::formatv("loop({0})", op); }
 
 //
 // ExprNodePragma

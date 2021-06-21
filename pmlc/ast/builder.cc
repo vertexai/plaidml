@@ -2,6 +2,7 @@
 
 #include "pmlc/ast/builder.h"
 
+#include <algorithm>
 #include <limits>
 #include <mutex>
 #include <stack>
@@ -226,6 +227,14 @@ private:
         })
         .Case<ExprNodeElement>([&](ExprNodeElement *expr) { push(expr->expr); })
         .Case<ExprNodeLayer>([&](ExprNodeLayer *expr) {
+          for (const ExprNodePtr &node : llvm::reverse(expr->results)) {
+            push(node);
+          }
+          for (const ExprNodePtr &node : llvm::reverse(expr->operands)) {
+            push(node);
+          }
+        })
+        .Case<ExprNodeLoop>([&](ExprNodeLoop *expr) {
           for (const ExprNodePtr &node : llvm::reverse(expr->results)) {
             push(node);
           }
@@ -558,6 +567,8 @@ struct ProgramBuilder {
               })
               .Case<ExprNodeLayer>(
                   [&](ExprNodeLayer *node) { return handleLayer(node); })
+              .Case<ExprNodeLoop>(
+                  [&](ExprNodeLoop *node) { return handleLoop(node); })
               .Case<ExprNodePragma>(
                   [&](ExprNodePragma *node) { return handlePragma(node); });
       if (value) {
@@ -756,6 +767,81 @@ struct ProgramBuilder {
         .create<tile::PragmaOp>(loc, tensor, node->op,
                                 builder.getDictionaryAttr(attrs))
         .result();
+  }
+
+  Value handleLoop(ExprNodeLoop *node) {
+    auto &operands = node->operands;
+    auto maxTripCount = builder.lookupNode(operands[0]);
+
+    SmallVector<Value> iterGlobal;
+    for (size_t i = 1; i < operands.size(); i++) {
+      iterGlobal.push_back(builder.lookupNode(operands[i]));
+    }
+
+    auto scfForOp = builder.create<tile::LoopOp>(loc, maxTripCount, iterGlobal);
+    OpBuilder bodyBuilder(scfForOp.getLoopBody());
+    // Set a mapping of global and local Values for loop iterators
+    BlockAndValueMapping mapper;
+    auto iterLocal = scfForOp.getRegionIterArgs();
+    for (auto tuple : llvm::zip(iterGlobal, iterLocal)) {
+      Value outer, inner;
+      std::tie(outer, inner) = tuple;
+      mapper.map(outer, inner);
+    }
+    // Find all ops that belong to loop body
+    llvm::SetVector<Operation *> bodyOpSet;
+    std::vector<Value> valueStack(iterGlobal.begin(), iterGlobal.end());
+    while (!valueStack.empty()) {
+      auto uses = valueStack.back().getUses();
+      for (auto &use : uses) {
+        auto op = use.getOwner();
+        if (op != scfForOp.getOperation()) {
+          for (auto result : op->getResults()) {
+            valueStack.insert(valueStack.begin(), result);
+          }
+          bodyOpSet.insert(op);
+        }
+      }
+      valueStack.pop_back();
+    }
+    // Sort the operations in loop body as the original order in outside block
+    struct opComparator {
+      inline bool operator()(Operation *op1, Operation *op2) {
+        return op1->isBeforeInBlock(op2);
+      }
+    };
+    auto bodyOpVec = bodyOpSet.takeVector();
+    std::sort(bodyOpVec.begin(), bodyOpVec.end(), opComparator());
+    // Move loop body ops into scf_forOp body region
+    SmallVector<Value> resultVals;
+    for (const ExprNodePtr &result : node->results) {
+      resultVals.push_back(builder.lookupNode(result));
+    }
+    llvm::SetVector<Operation *> toRemove;
+    SmallVector<Value, 4> yieldValues(resultVals.size());
+    for (auto op : bodyOpVec) {
+      Operation *clonedOp = bodyBuilder.clone(*op, mapper);
+      op->replaceAllUsesWith(clonedOp);
+      for (auto value : op->getResults()) {
+        auto it = std::find(resultVals.begin(), resultVals.end(), value);
+        if (it != resultVals.end()) {
+          auto opResultOrder = value.dyn_cast<OpResult>().getResultNumber();
+          auto yieldValueOrder = std::distance(resultVals.begin(), it);
+          yieldValues[yieldValueOrder] = clonedOp->getResult(opResultOrder);
+        }
+      }
+      toRemove.insert(op);
+    }
+    bodyBuilder.create<tile::YieldOp>(loc, yieldValues);
+    for (auto op : toRemove) {
+      op->erase();
+    }
+    SmallVector<Value, 4> tuple;
+    for (OpResult result : scfForOp.getResults()) {
+      tuple.push_back(result);
+    }
+    builder.exprTuples[node] = tuple;
+    return nullptr;
   }
 
   Value makeGatherOp(ExprNodeIntrinsic *node, ArrayRef<Value> operands) {
