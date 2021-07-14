@@ -27,6 +27,7 @@ pml_cc_library(
     pmlc::conversion::scf_to_omp
     pmlc::conversion::stdx_to_llvm
     pmlc::conversion::tile_to_pxa
+    pmlc::conversion::linalg_to_tile
     pmlc::dialect::affinex::transforms
     pmlc::dialect::layer::ir
     pmlc::dialect::layer::transforms
