@@ -14,6 +14,8 @@ std::unique_ptr<mlir::Pass> createAlgebraicOptPass();
 
 std::unique_ptr<mlir::Pass> createComputeBoundsPass();
 
+std::unique_ptr<mlir::Pass> createTestConv2dFinderPass();
+
 std::unique_ptr<mlir::Pass> createExpandReshapePass();
 
 std::unique_ptr<mlir::Pass> createMaterializePass();

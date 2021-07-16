@@ -1,0 +1,10 @@
+pml_cc_library(
+  NAME
+    analysis
+  SRCS
+  HDRS
+    conv2d_finder.h
+  DEPS
+    MLIRIR
+    pmlc::dialect::tile::ir
+)
