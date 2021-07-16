@@ -155,7 +155,7 @@ void registerDetectionOutput() {
     if (keep_top_k[0] > -1 && selected_indices_shape[0] > keep_top_k[0]) {
       edsl::Tensor scores_slice = op::slice(selected_scores).add_dim(0, selected_indices_shape[0]).add_dim(2, 3);
       auto sorted_idxs = op::squeeze(edsl::argsort(scores_slice, 0, edsl::SortDirection::DESC), {-1});
-      edsl::Tensor idxs_topk = edsl::gather(sorted_idxs, edsl::index({edsl::TensorDim(keep_top_k[0])}, 0));
+      edsl::Tensor idxs_topk = op::slice(sorted_idxs).add_dim(0, keep_top_k[0]);
       auto idxs_topk_sorted = op::sort(idxs_topk, 0, edsl::SortDirection::ASC);
       topk_results = edsl::gather(selected_scores, idxs_topk_sorted).axis(0);
     } else {

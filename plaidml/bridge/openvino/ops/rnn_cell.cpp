@@ -17,11 +17,11 @@ namespace PlaidMLPlugin {
 void registerRnnCell() {
   registerOp("RnnCell", [](const Context& ctx) {
     IE_ASSERT(ctx.operands.size() == 5);
-    auto Xt = ctx.operands.at(0);    // input tensor
-    auto Ht_1 = ctx.operands.at(1);  // hidden state tensor
-    auto Wi = ctx.operands.at(2);    // weight tensor [hidden_size, input_size]
-    auto Ri = ctx.operands.at(3);    // recurrence weight tensor [hidden_size, input_size]
-    auto Bi = ctx.operands.at(4);    // bias tensor [hidden_size]
+    auto xt = ctx.operands.at(0);    // input tensor
+    auto ht_1 = ctx.operands.at(1);  // hidden state tensor
+    auto W = ctx.operands.at(2);     // weight tensor [hidden_size, input_size]
+    auto R = ctx.operands.at(3);     // recurrence weight tensor [hidden_size, input_size]
+    auto B = ctx.operands.at(4);     // bias tensor [hidden_size]
 
     auto* layer = ngraph::as_type<ngraph::opset4::RNNCell>(ctx.layer);
 
@@ -35,10 +35,10 @@ void registerRnnCell() {
     auto clip = layer->get_clip();
     auto should_clip = (clip > 0.f) && (clip != std::numeric_limits<float>::infinity());
 
-    auto Ti = op::dot(Xt, op::transpose(Wi)) + op::dot(Ht_1, op::transpose(Ri)) + Bi;
-    auto Ht = clip_activation(activation, should_clip, clip, Ti);
+    auto ht = op::dot(xt, op::transpose(W)) + op::dot(ht_1, op::transpose(R)) + B;
+    ht = clip_activation(activation, should_clip, clip, ht);
 
-    return edsl::make_tuple(Ht);
+    return edsl::make_tuple(ht);
   });
 }
 

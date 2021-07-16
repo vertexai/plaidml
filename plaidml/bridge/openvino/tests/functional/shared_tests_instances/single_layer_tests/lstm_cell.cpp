@@ -11,8 +11,9 @@ using namespace LayerTestsDefinitions;
 
 namespace {
 std::vector<bool> should_decompose{
+    // true will decompose LSTMCell to component ops and skip plaidml LSTMCell implementation
     true,
-    // false,
+    false,
 };
 std::vector<size_t> batch{5};
 std::vector<size_t> hidden_size{1, 10};
@@ -59,7 +60,7 @@ INSTANTIATE_TEST_CASE_P(LSTMCellF16, LSTMCellTest,
 
 INSTANTIATE_TEST_CASE_P(smoke, LSTMCellTest,
                         ::testing::Combine(                                                            //
-                            ::testing::Values(true),                                                   //
+                            ::testing::Values(false),                                                  //
                             ::testing::Values(3),                                                      //
                             ::testing::Values(64),                                                     //
                             ::testing::Values(32),                                                     //

@@ -104,8 +104,8 @@ const std::vector<int64_t> argDepth_T = {1};
 const std::vector<ngraph::element::Type> argSetType_T = {
     ngraph::element::i8,
     ngraph::element::u8,
-    ngraph::element::bf16,
     ngraph::element::f32,
+    // ngraph::element::bf16,  // Currently not supported
 };
 const std::vector<float> argOnValue_T = {1};
 const std::vector<float> argOffValue_T = {1};
@@ -126,10 +126,10 @@ const auto oneHotParams_T = testing::Combine(         //
     testing::Values(CommonTestUtils::DEVICE_PLAIDML)  //
 );
 
-// INSTANTIATE_TEST_CASE_P(             //
-//    smoke_OneHotArgType,              //
-//    OneHotLayerTest,                  //
-//    oneHotParams_T,                   //
-//    OneHotLayerTest::getTestCaseName  //
-//);
+INSTANTIATE_TEST_CASE_P(              //
+    smoke_OneHotArgType,              //
+    OneHotLayerTest,                  //
+    oneHotParams_T,                   //
+    OneHotLayerTest::getTestCaseName  //
+);
 }  // namespace

@@ -50,21 +50,35 @@ void registerRegionYolo() {
                                        static_cast<int64_t>(width)};
     edsl::Tensor O = edsl::reshape(I, yolo_shape);
 
-    int64_t index_axis = 2;
+    auto IX = edsl::index({edsl::TensorDim(2)}, 0);
+    edsl::Tensor O_update = op::sigmoid(op::slice(O)  //
+                                            .add_dim(0, batches)
+                                            .add_dim(0, num_regions)
+                                            .add_dim(0, 2)
+                                            .add_dim(0, height)
+                                            .add_dim(0, width));
+    O = edsl::scatter(O, IX, O_update).axis(2).mode(edsl::ScatterMode::UPDATE_SLICE);
 
-    auto IX = edsl::cast(edsl::index({edsl::TensorDim(2)}, 0), DType::INT32);
-    edsl::Tensor O_update = op::sigmoid(edsl::gather(O, IX).axis(index_axis));
-    O = edsl::scatter(O, IX, O_update).axis(index_axis).mode(edsl::ScatterMode::UPDATE_SLICE);
-
-    IX = edsl::cast(edsl::index({edsl::TensorDim(end_index)}, 0), DType::INT32) + coords;
-    O_update = op::sigmoid(edsl::gather(O, IX).axis(index_axis));
-    O = edsl::scatter(O, IX, O_update).axis(index_axis).mode(edsl::ScatterMode::UPDATE_SLICE);
+    IX = edsl::index({edsl::TensorDim(end_index)}, 0) + coords;
+    O_update = op::sigmoid(op::slice(O)
+                               .add_dim(0, batches)
+                               .add_dim(0, num_regions)
+                               .add_dim(coords, coords + end_index)
+                               .add_dim(0, height)
+                               .add_dim(0, width));
+    O = edsl::scatter(O, IX, O_update).axis(2).mode(edsl::ScatterMode::UPDATE_SLICE);
 
     if (do_softmax) {
       edsl::TensorDim O_dim(classes);
-      IX = edsl::cast(edsl::index({O_dim}, 0), DType::INT32) + coords + 1;
-      O_update = op::softmax(edsl::gather(O, IX).axis(index_axis), index_axis);
-      O = edsl::scatter(O, IX, O_update).axis(index_axis).mode(edsl::ScatterMode::UPDATE_SLICE);
+      IX = edsl::index({O_dim}, 0) + coords + 1;
+      O_update = op::softmax(op::slice(O)
+                                 .add_dim(0, batches)
+                                 .add_dim(0, num_regions)
+                                 .add_dim(coords + 1, coords + 1 + classes)
+                                 .add_dim(0, height)
+                                 .add_dim(0, width),
+                             2);
+      O = edsl::scatter(O, IX, O_update).axis(2).mode(edsl::ScatterMode::UPDATE_SLICE);
     }
 
     return edsl::make_tuple(edsl::reshape(O, input_shape));
