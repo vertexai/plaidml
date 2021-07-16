@@ -57,7 +57,8 @@ std::unique_ptr<mlir::Pass> createTileAccumulatePass();
 std::unique_ptr<mlir::Pass> createVectorizePass();
 
 std::unique_ptr<mlir::Pass> createVectorizePass(mlir::StringRef strategy,
-                                                unsigned vectorWidth = 8);
+                                                unsigned vectorWidth = 8,
+                                                bool vectorizeMathOp = true);
 
 std::unique_ptr<mlir::Pass> createSimplifyArithmeticPass();
 

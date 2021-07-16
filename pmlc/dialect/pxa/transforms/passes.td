@@ -166,12 +166,17 @@ def TileAccumulate : FunctionPass<"pxa-tile-accumulate"> {
 def Vectorize : FunctionPass<"pxa-vectorize"> {
   let summary = "Perform vectorization based on specified strategy";
   let constructor = "pmlc::dialect::pxa::createVectorizePass()";
-  let dependentDialects = ["mlir::vector::VectorDialect"];
+  let dependentDialects = [
+    "mlir::vector::VectorDialect",
+    "mlir::memref::MemRefDialect"
+  ];
   let options = [
     Option<"strategy", "strategy", "std::string",
            "\"simple\"", "Strategy to use for vectorization">,
     Option<"vectorWidth", "width", "unsigned", /*default=*/"8",
-           "Vector register size in elements">
+           "Vector register size in elements">,
+    Option<"vectorizeMathOp", "vectorize-math-op", "bool", /*default=*/"true",
+           "Vectorize math dialect op or create inner loop for it">
   ];
 }
 

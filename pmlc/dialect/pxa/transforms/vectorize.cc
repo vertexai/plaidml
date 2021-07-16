@@ -11,6 +11,7 @@
 #include "llvm/ADT/StringMap.h"
 #include "llvm/ADT/TypeSwitch.h"
 
+#include "mlir/Dialect/Math/IR/Math.h"
 #include "mlir/Dialect/Vector/VectorOps.h"
 #include "mlir/IR/AsmState.h"
 #include "mlir/Interfaces/VectorInterfaces.h"
@@ -41,6 +42,7 @@ private:
   AffineParallelOp loop;
   BlockArgument index;
   unsigned vectorWidth;
+  bool vectorizeMathOp;
   DenseSet<Value> vectorizedValues;
   DenseSet<Operation *> vectorizedOps;
   DenseSet<Operation *> zeroStrideReductions;
@@ -125,6 +127,118 @@ private:
     return success();
   }
 
+  template <typename OpTy>
+  void createLoopForMathUnaryOp(OpTy op) {
+    if (op->getNumOperands() != 1) {
+      op->emitRemark("Vectorize op: Failed, op has more than 1 operand");
+      return;
+    }
+    OpBuilder builder(op);
+    auto loc = op.getLoc();
+
+    // For each non-vector operand, broadcast as needed
+    mlir::Value operand = op.getOperand();
+    if (!operand.getType().isa<VectorType>()) {
+      auto vectorType = VectorType::get({vectorWidth}, operand.getType());
+      auto broadcast =
+          builder.create<vector::BroadcastOp>(loc, vectorType, operand);
+      operand.replaceAllUsesWith(broadcast);
+    }
+    // Update the result type
+    auto result = op.getResult();
+    auto vectorType = VectorType::get({vectorWidth}, result.getType());
+    result.setType(vectorType);
+
+    auto memrefType =
+        MemRefType::get(vectorType.getShape(), vectorType.getElementType());
+    auto vecMem = builder.create<memref::AllocOp>(loc, memrefType);
+    SmallVector<Value, 8> vectorIvs{builder.create<ConstantIndexOp>(loc, 0)};
+    builder.create<vector::TransferWriteOp>(loc, operand, vecMem, vectorIvs);
+
+    auto parallelOp = builder.create<AffineParallelOp>(
+        loc, ArrayRef<Type>{memrefType},
+        ArrayRef<AtomicRMWKind>{AtomicRMWKind::assign},
+        AffineMap::getConstantMap(0, op.getContext()), ValueRange(),
+        AffineMap::getConstantMap(vectorWidth, op.getContext()), ValueRange(),
+        ArrayRef<int64_t>{1});
+    auto parallelBody = parallelOp.getBody();
+    builder.setInsertionPointToStart(parallelBody);
+
+    auto elementIvs = parallelBody->getArguments();
+    auto element = builder.create<AffineLoadOp>(loc, vecMem, elementIvs);
+    auto mathOpResult = builder.create<OpTy>(loc, element).getResult();
+    auto idMap = builder.getMultiDimIdentityMap(memrefType.getRank());
+    auto reduceOp = builder.create<pxa::PxaReduceOp>(
+        loc, AtomicRMWKind::assign, mathOpResult, vecMem, idMap, elementIvs);
+    builder.create<AffineYieldOp>(loc, reduceOp.getResult());
+
+    builder.setInsertionPointAfter(parallelOp);
+    auto vectorOp = builder.create<vector::TransferReadOp>(
+        loc, vectorType, parallelOp.getResult(0), vectorIvs);
+    op.replaceAllUsesWith(vectorOp.getOperation());
+    op.erase();
+  }
+
+  template <typename OpTy>
+  void createLoopForMathBinaryOp(OpTy op) {
+    if (op->getNumOperands() != 2) {
+      op->emitRemark("Vectorize op: Failed, op does not have 2 operands");
+      return;
+    }
+    OpBuilder builder(op);
+    auto loc = op.getLoc();
+
+    // For each non-vector operand, broadcast as needed
+    for (mlir::Value operand : op.getOperands()) {
+      if (!operand.getType().isa<VectorType>()) {
+        auto vectorType = VectorType::get({vectorWidth}, operand.getType());
+        auto broadcast =
+            builder.create<vector::BroadcastOp>(loc, vectorType, operand);
+        operand.replaceAllUsesWith(broadcast);
+      }
+    }
+    // Update the result type
+    auto result = op.getResult();
+    auto vectorType = VectorType::get({vectorWidth}, result.getType());
+    result.setType(vectorType);
+
+    auto memrefType =
+        MemRefType::get(vectorType.getShape(), vectorType.getElementType());
+    SmallVector<Value, 8> vectorIvs{builder.create<ConstantIndexOp>(loc, 0)};
+
+    mlir::Value operand1 = op.getOperand(0);
+    auto vecMem1 = builder.create<memref::AllocOp>(loc, memrefType);
+    builder.create<vector::TransferWriteOp>(loc, operand1, vecMem1, vectorIvs);
+    mlir::Value operand2 = op.getOperand(1);
+    auto vecMem2 = builder.create<memref::AllocOp>(loc, memrefType);
+    builder.create<vector::TransferWriteOp>(loc, operand2, vecMem2, vectorIvs);
+
+    auto parallelOp = builder.create<AffineParallelOp>(
+        loc, ArrayRef<Type>{memrefType},
+        ArrayRef<AtomicRMWKind>{AtomicRMWKind::assign},
+        AffineMap::getConstantMap(0, op.getContext()), ValueRange(),
+        AffineMap::getConstantMap(vectorWidth, op.getContext()), ValueRange(),
+        ArrayRef<int64_t>{1});
+    auto parallelBody = parallelOp.getBody();
+    builder.setInsertionPointToStart(parallelBody);
+
+    auto elementIvs = parallelBody->getArguments();
+    auto element1 = builder.create<AffineLoadOp>(loc, vecMem1, elementIvs);
+    auto element2 = builder.create<AffineLoadOp>(loc, vecMem2, elementIvs);
+    auto mathOpResult =
+        builder.create<OpTy>(loc, element1, element2).getResult();
+    auto idMap = builder.getMultiDimIdentityMap(memrefType.getRank());
+    auto reduceOp = builder.create<pxa::PxaReduceOp>(
+        loc, AtomicRMWKind::assign, mathOpResult, vecMem1, idMap, elementIvs);
+    builder.create<AffineYieldOp>(loc, reduceOp.getResult());
+
+    builder.setInsertionPointAfter(parallelOp);
+    auto vectorOp = builder.create<vector::TransferReadOp>(
+        loc, vectorType, parallelOp.getResult(0), vectorIvs);
+    op.replaceAllUsesWith(vectorOp.getOperation());
+    op.erase();
+  }
+
   LogicalResult tryVectorizeScalarOp(Operation *op) {
     if (op->getNumRegions() != 0) {
       return op->emitRemark("Vectorize op: Failed, interior loops");
@@ -169,8 +283,9 @@ private:
 
 public:
   VectorizeCandidate(AffineParallelOp loop, BlockArgument index,
-                     unsigned vectorWidth)
-      : loop(loop), index(index), vectorWidth(vectorWidth) {
+                     unsigned vectorWidth, bool vectorizeMathOp)
+      : loop(loop), index(index), vectorWidth(vectorWidth),
+        vectorizeMathOp(vectorizeMathOp) {
     IVLOG(3, "Vectorize candidate: " << getValueName(loop, index));
   }
 
@@ -238,10 +353,29 @@ public:
     if (!vectorizedOps.count(op)) {
       return;
     }
-    TypeSwitch<Operation *>(op)
-        .Case<PxaLoadOp>([&](auto op) { vectorizeLoadOp(op); })
-        .Case<PxaReduceOp>([&](auto op) { vectorizeReduceOp(op); })
-        .Default([&](Operation *op) { vectorizeScalarOp(op); });
+    if (vectorizeMathOp) {
+      TypeSwitch<Operation *>(op)
+          .Case<PxaLoadOp>([&](auto op) { vectorizeLoadOp(op); })
+          .Case<PxaReduceOp>([&](auto op) { vectorizeReduceOp(op); })
+          .Default([&](Operation *op) { vectorizeScalarOp(op); });
+    } else {
+      TypeSwitch<Operation *>(op)
+          .Case<PxaLoadOp>([&](auto op) { vectorizeLoadOp(op); })
+          .Case<PxaReduceOp>([&](auto op) { vectorizeReduceOp(op); })
+          .Case<math::CosOp>(
+              [&](auto op) { createLoopForMathUnaryOp<math::CosOp>(op); })
+          .Case<math::ExpOp>(
+              [&](auto op) { createLoopForMathUnaryOp<math::ExpOp>(op); })
+          .Case<math::LogOp>(
+              [&](auto op) { createLoopForMathUnaryOp<math::LogOp>(op); })
+          .Case<math::SinOp>(
+              [&](auto op) { createLoopForMathUnaryOp<math::SinOp>(op); })
+          .Case<math::SqrtOp>(
+              [&](auto op) { createLoopForMathUnaryOp<math::SqrtOp>(op); })
+          .Case<math::TanhOp>(
+              [&](auto op) { createLoopForMathUnaryOp<math::TanhOp>(op); })
+          .Default([&](Operation *op) { vectorizeScalarOp(op); });
+    }
   }
 
   LogicalResult isLegal() {
@@ -291,8 +425,8 @@ public:
 };
 
 LogicalResult performVectorization(AffineParallelOp op, BlockArgument index,
-                                   unsigned vectorWidth) {
-  VectorizeCandidate candidate(op, index, vectorWidth);
+                                   unsigned vectorWidth, bool vectorizeMathOp) {
+  VectorizeCandidate candidate(op, index, vectorWidth, vectorizeMathOp);
   if (failed(candidate.isLegal())) {
     return failure();
   }
@@ -300,7 +434,8 @@ LogicalResult performVectorization(AffineParallelOp op, BlockArgument index,
   return candidate.vectorize();
 }
 
-LogicalResult vectorizeOverOutputs(AffineParallelOp op, unsigned vectorWidth) {
+LogicalResult vectorizeOverOutputs(AffineParallelOp op, unsigned vectorWidth,
+                                   bool vectorizeMathOp) {
   IVLOG(3, "Attempting to vectorize: " << debugString(*op));
   if (op.getNumResults() != 1) {
     return op.emitRemark("vectorizeOverOutputs: Failed, #result != 1");
@@ -324,22 +459,24 @@ LogicalResult vectorizeOverOutputs(AffineParallelOp op, unsigned vectorWidth) {
   if (options.size() != 1) {
     return op.emitRemark("vectorizeOverOutputs: Failed, options != 1");
   }
-  return performVectorization(op, options[0], vectorWidth);
+  return performVectorization(op, options[0], vectorWidth, vectorizeMathOp);
 }
 
-LogicalResult vectorizeOverIVs(AffineParallelOp band, unsigned vectorWidth) {
+LogicalResult vectorizeOverIVs(AffineParallelOp band, unsigned vectorWidth,
+                               bool vectorizeMathOp) {
   for (BlockArgument iv : band.getIVs()) {
-    if (succeeded(performVectorization(band, iv, vectorWidth))) {
+    if (succeeded(performVectorization(band, iv, vectorWidth, vectorizeMathOp))) {
       break;
     }
   }
   return success();
 }
 
-LogicalResult vectorizeRecursive(AffineParallelOp band, unsigned vectorWidth) {
+LogicalResult vectorizeRecursive(AffineParallelOp band, unsigned vectorWidth,
+                                 bool vectorizeMathOp) {
   band.walk([&](AffineParallelOp op) {
     for (BlockArgument iv : op.getIVs()) {
-      if (succeeded(performVectorization(op, iv, vectorWidth))) {
+      if (succeeded(performVectorization(op, iv, vectorWidth, vectorizeMathOp))) {
         break;
       }
     }
@@ -347,8 +484,8 @@ LogicalResult vectorizeRecursive(AffineParallelOp band, unsigned vectorWidth) {
   return success();
 }
 
-using StrategyFn =
-    std::function<LogicalResult(AffineParallelOp op, unsigned vectorWidth)>;
+using StrategyFn = std::function<LogicalResult(
+    AffineParallelOp op, unsigned vectorWidth, bool vectorizeMathOp)>;
 
 static llvm::StringMap<StrategyFn> strategies{
     {kVectorizeStrategy_Simple, vectorizeOverIVs},
@@ -359,9 +496,11 @@ static llvm::StringMap<StrategyFn> strategies{
 struct VectorizePass : public VectorizeBase<VectorizePass> {
   VectorizePass() = default;
 
-  explicit VectorizePass(StringRef strategy, unsigned vectorWidth) {
+  explicit VectorizePass(StringRef strategy, unsigned vectorWidth,
+                         bool vectorizeMathOp) {
     this->strategy = strategy.str();
     this->vectorWidth = vectorWidth;
+    this->vectorizeMathOp = vectorizeMathOp;
   }
 
   void runOnFunction() final {
@@ -372,7 +511,7 @@ struct VectorizePass : public VectorizeBase<VectorizePass> {
       return signalPassFailure();
     }
     for (auto band : func.getOps<AffineParallelOp>()) {
-      if (failed(it->second(band, vectorWidth))) {
+      if (failed(it->second(band, vectorWidth, vectorizeMathOp))) {
         return signalPassFailure();
       }
     }
@@ -383,9 +522,9 @@ std::unique_ptr<Pass> createVectorizePass() {
   return std::make_unique<VectorizePass>();
 }
 
-std::unique_ptr<mlir::Pass> createVectorizePass(StringRef strategy,
-                                                unsigned vectorWidth) {
-  return std::make_unique<VectorizePass>(strategy, vectorWidth);
+std::unique_ptr<mlir::Pass>
+createVectorizePass(StringRef strategy, unsigned vectorWidth, bool vectorizeMathOp) {
+  return std::make_unique<VectorizePass>(strategy, vectorWidth, vectorizeMathOp);
 }
 
 // TODO: Maybe move this to a generic utility somewhere
