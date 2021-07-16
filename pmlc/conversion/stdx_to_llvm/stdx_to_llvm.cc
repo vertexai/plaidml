@@ -27,13 +27,17 @@ struct LibMCallLowering : public ConvertOpToLLVMPattern<OpType> {
   LogicalResult
   matchAndRewrite(OpType op, ArrayRef<Value> operands,
                   ConversionPatternRewriter &rewriter) const override {
-    auto f32Type = rewriter.getF32Type();
-    SmallVector<Type, 2> argTypes(getArity(), f32Type);
+    auto typeConverter = this->getTypeConverter();
+    auto resType = typeConverter->convertType(op.getResult().getType());
+    if (!resType) {
+      return failure();
+    }
+    SmallVector<Type, 2> argTypes(getArity(), resType);
     auto funcType =
-        LLVM::LLVMFunctionType::get(f32Type, argTypes, /*isVarArg=*/false);
+        LLVM::LLVMFunctionType::get(resType, argTypes, /*isVarArg=*/false);
     auto sym = getOrInsertFuncOp(getFuncName(), funcType, op, rewriter);
     rewriter.replaceOpWithNewOp<LLVM::CallOp>(
-        op, ArrayRef<Type>{f32Type}, rewriter.getSymbolRefAttr(sym), operands);
+        op, ArrayRef<Type>{resType}, rewriter.getSymbolRefAttr(sym), operands);
     return success();
   }
 
