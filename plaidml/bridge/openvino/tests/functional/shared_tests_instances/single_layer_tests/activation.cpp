@@ -129,13 +129,11 @@ INSTANTIATE_TEST_CASE_P(                  //
     ActivationLayerTest::getTestCaseName  //
 );
 
-// ActivationParamLayerTest fails in nGraph
-//
-// INSTANTIATE_TEST_CASE_P(
-//    smoke_Activation_Basic,
-//    ActivationParamLayerTest,
-//    basicPreluCases,
-//    ActivationLayerTest::getTestCaseName
-//);
+INSTANTIATE_TEST_CASE_P(                  //
+    smoke_Activation_Param_Basic_Prelu,   //
+    ActivationParamLayerTest,             //
+    basicPreluCases,                      //
+    ActivationLayerTest::getTestCaseName  //
+);
 
 }  // namespace

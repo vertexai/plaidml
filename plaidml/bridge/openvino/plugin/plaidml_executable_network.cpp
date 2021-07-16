@@ -66,14 +66,14 @@ InferenceEngine::Parameter PlaidMLExecutableNetwork::GetMetric(const std::string
   }
 }
 
-void PlaidMLExecutableNetwork::ExportImpl(std::ostream& model) {  //
+void PlaidMLExecutableNetwork::Export(std::ostream& model) {  //
   model << program_.str() << std::endl;
 }
 
 void PlaidMLExecutableNetwork::Export(const std::string& modelFileName) {
   std::ofstream modelFile(modelFileName, std::ios::out);
   if (modelFile.is_open()) {
-    ExportImpl(modelFile);
+    Export(modelFile);
   } else {
     THROW_IE_EXCEPTION << "The " << modelFileName << " file can not be opened for export";
   }

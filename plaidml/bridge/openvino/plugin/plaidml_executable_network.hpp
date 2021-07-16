@@ -26,9 +26,7 @@ class PlaidMLExecutableNetwork : public InferenceEngine::ExecutableNetworkThread
   InferenceEngine::Parameter GetMetric(const std::string& name) const override;
 
   void Export(const std::string& modelFileName) final;
-  void Export(std::ostream& networkModel) final { ExportImpl(networkModel); }
-
-  void ExportImpl(std::ostream& model) final;
+  void Export(std::ostream& networkModel) final;
 
  private:
   plaidml::Program program_;
