@@ -40,11 +40,11 @@ void PadRangesPass::runOnFunction() {
   func.walk([&](ContractionOp op) {
     // Skip some cases where the padding pass can't operate.
     if (op.getNumSymbols()) {
-      op.emitRemark("padding cannot be run on symbolic contractions");
+      IVLOG(3, "padding cannot be run on symbolic contractions");
       return;
     }
     if (!op.lowerBounds() || !op.upperBounds()) {
-      op.emitRemark("contraction bounds must be computed");
+      IVLOG(3, "contraction bounds must be computed");
       return;
     }
     // Extract which dimensions of the contraction are which output dimension
@@ -53,7 +53,7 @@ void PadRangesPass::runOnFunction() {
     for (unsigned i = 0; i < outRank; i++) {
       auto outDim = op.sink().getResult(i).dyn_cast<AffineDimExpr>();
       if (!outDim) {
-        op.emitRemark("Invalid output access");
+        IVLOG(3, "Invalid output access");
         return;
       }
       outIdx[i] = outDim.getPosition();
@@ -67,11 +67,11 @@ void PadRangesPass::runOnFunction() {
       auto upperConst =
           op.upperBounds()->getResult(i).dyn_cast<AffineConstantExpr>();
       if (!lowerConst || lowerConst.getValue() != 0) {
-        op.emitRemark("Invalid lower bound");
+        IVLOG(3, "Invalid lower bound");
         return;
       }
       if (!upperConst) {
-        op.emitRemark("Invalid lower bound");
+        IVLOG(3, "Invalid lower bound");
         return;
       }
       ranges.push_back(upperConst.getValue() + 1);
@@ -79,7 +79,7 @@ void PadRangesPass::runOnFunction() {
     // Get strides for output
     auto outStrides = util::computeStrideArray(op.getResultType(), op.sink());
     if (!outStrides) {
-      op.emitRemark("Unable to compute output strides");
+      IVLOG(3, "Unable to compute output strides");
       return;
     }
     IVLOG(2, "Pad Ranges: outStrides = " << *outStrides);

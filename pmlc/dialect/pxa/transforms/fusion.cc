@@ -109,7 +109,7 @@ struct FusionInfo {
     SmallVector<StrideInfo> strides;
     if (failed(
             computeMultiDimStrideInfo(access.getAffineValueMap(), strides))) {
-      access.getOperation()->emitRemark("Failed to compute strides");
+      IVLOG(3, "Failed to compute strides");
       return false;
     }
     for (StrideInfo si : strides) {
@@ -150,9 +150,9 @@ struct FusionInfo {
       const auto &sb = stridesB[i];
       // If the offsets don't match, bail
       if (sa.offset != sb.offset) {
-        opB.getOperation()->emitRemark(
-            "Failed to fuse with def offsets mismatch: i = ")
-            << i << ", A: " << debugString(sa) << ", B: " << debugString(sb);
+        IVLOG(3, "Failed to fuse with def offsets mismatch: i = "
+                     << i << ", A: " << debugString(sa)
+                     << ", B: " << debugString(sb));
         return false;
       }
       // If either are empty, nothing to do
@@ -184,8 +184,7 @@ struct FusionInfo {
       BlockArgument argB = pickUniqueTop(sb.strides);
 
       if (!argA || !argB) {
-        opB.getOperation()->emitRemark(
-            "Failed to fuse with def due to multiple high stride indexes");
+        IVLOG(3, "Failed to fuse with def due to multiple high stride indexes");
         return false;
       }
 
@@ -197,9 +196,8 @@ struct FusionInfo {
 
       // Fail if the total range of the two arguments doesn't match
       if (mulA * sizeA != mulB * sizeB) {
-        opB.getOperation()->emitRemark(
-            "Failed to fuse with def due to mismatched ranges, i = ")
-            << i << ": " << mulA * sizeA << " vs " << mulB * sizeB;
+        IVLOG(3, "Failed to fuse with def due to mismatched ranges, i = "
+                     << i << ": " << mulA * sizeA << " vs " << mulB * sizeB);
         return false;
       }
 
@@ -223,7 +221,7 @@ struct FusionInfo {
       AffineValueMap::difference(lowerA, lowerB, &diff);
       if (!diff.getAffineMap().isSingleConstant() ||
           diff.getAffineMap().getSingleConstantResult() != 0) {
-        bInfo.op.emitRemark("Lower bounds mismatch");
+        IVLOG(3, "Lower bounds mismatch");
         return false;
       }
 
@@ -234,7 +232,7 @@ struct FusionInfo {
                                        << ") = " << aToB.count(argA));
         IVLOG(3, "Failed, bToA.count(" << argB.getArgNumber()
                                        << ") = " << bToA.count(argB));
-        bInfo.op.emitRemark("Mapping is not 1 to 1");
+        IVLOG(3, "Mapping is not 1 to 1");
         return false;
       }
       aToB[argA] = argB;
@@ -242,13 +240,13 @@ struct FusionInfo {
     }
 
     if (aToB.size() == 0) {
-      bInfo.op.emitRemark("No index matches");
+      IVLOG(3, "No index matches");
       return false;
     }
 
     if (exactlyMatch && (aToB.size() != aInfo.sizes.size() ||
                          bToA.size() != bInfo.sizes.size())) {
-      bInfo.op.emitRemark("Loops do not match exactly.");
+      IVLOG(3, "Loops do not match exactly.");
       return false;
     }
 
@@ -275,7 +273,7 @@ struct FusionInfo {
       auto memoryActivity = computeMemoryActivity();
       if (memoryActivity > memoryActivityThreshold) {
         undoTilings();
-        bInfo.op.emitRemark("Over-fusion prevention");
+        IVLOG(3, "Over-fusion prevention");
         return false;
       }
     }
@@ -288,14 +286,14 @@ struct FusionInfo {
           computeThisRelativeAccess(raw.second);
       if (!aRap || !bRap) {
         undoTilings();
-        bInfo.op.emitRemark("RelativeAccessPattern computation failure");
+        IVLOG(3, "RelativeAccessPattern computation failure");
         return false;
       }
       bool ret = hasPerfectAliasing(*aRap, *bRap, bToA);
       IVLOG(3, "  isAliased: " << ret);
       if (!ret) {
         undoTilings();
-        bInfo.op.emitRemark("imperfect aliasing");
+        IVLOG(3, "imperfect aliasing");
         return false;
       }
     }
@@ -308,14 +306,14 @@ struct FusionInfo {
           computeThisRelativeAccess(waw.second);
       if (!aRap || !bRap) {
         undoTilings();
-        bInfo.op.emitRemark("RelativeAccessPattern computation failure");
+        IVLOG(3, "RelativeAccessPattern computation failure");
         return false;
       }
       bool ret = hasPerfectAliasing(*aRap, *bRap, bToA);
       IVLOG(3, "  isAliased: " << ret);
       if (!ret) {
         undoTilings();
-        bInfo.op.emitRemark("imperfect aliasing");
+        IVLOG(3, "imperfect aliasing");
         return false;
       }
     }

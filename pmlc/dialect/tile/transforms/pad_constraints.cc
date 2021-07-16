@@ -15,6 +15,7 @@
 #include "pmlc/dialect/tile/ir/ops.h"
 #include "pmlc/dialect/tile/transforms/padding.h"
 #include "pmlc/dialect/tile/transforms/pass_detail.h"
+#include "pmlc/util/logging.h"
 
 using namespace mlir; // NOLINT
 
@@ -52,17 +53,17 @@ void PadConstraintsPass::runOnFunction() {
   func.walk([&](ContractionOp op) {
     // Skip some cases where the padding pass can't operate.
     if (op.getNumSymbols()) {
-      op.emitRemark("padding cannot be run on symbolic contractions");
+      IVLOG(3, "padding cannot be run on symbolic contractions");
       return;
     }
 
     if (!op.lowerBounds() || !op.upperBounds()) {
-      op.emitRemark("contraction bounds must be computed");
+      IVLOG(3, "contraction bounds must be computed");
       return;
     }
 
     if (!isValidForPadding(op.agg(), op.combo())) {
-      op.emitRemark("invalid agg/comb for use in padding");
+      IVLOG(3, "invalid agg/comb for use in padding");
       return;
     }
 
@@ -70,7 +71,7 @@ void PadConstraintsPass::runOnFunction() {
       auto tensor = op.getTensor(i);
       auto rankedTensorType = tensor.getType().cast<RankedTensorType>();
       if (!rankedTensorType.hasStaticShape()) {
-        op.emitRemark("padding cannot support dynamic memref sizes");
+        IVLOG(3, "padding cannot support dynamic memref sizes");
         return;
       }
 
